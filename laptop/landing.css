@@ -1,4 +1,4 @@
-/* Tokens adapted from design/variables.css (dark void, one violet action, amber spark). */
+/* Tokens adapted from the design reference (dark void, one violet action, amber spark). */
 :root {
   --color-void: #000000;
   --color-bone-white: #ffffff;
@@ -11,15 +11,17 @@
 
   --font-main: "Hanken Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
 
-  --text-display: clamp(3.75rem, 8vw, 7.0625rem);
+  --text-display: clamp(4.25rem, 12vw, 9rem);
+  --font-signal: "Instrument Serif", Georgia, "Times New Roman", serif;
   --radius-button: 24px;
   --page-max-width: 1280px;
   --pulse: 1.4s;
+  --stage-h: clamp(235px, 28vw, 380px);
 }
 
 * { box-sizing: border-box; }
 
-html { background: var(--color-void); }
+html { background: var(--color-void); scroll-behavior: smooth; }
 
 body {
   margin: 0;
@@ -34,24 +36,31 @@ body {
 
 a { color: inherit; }
 
-a:focus-visible {
+a:focus-visible,
+.button:focus-visible {
   outline: 2px solid var(--color-saffron-spark);
   outline-offset: 3px;
 }
 
+/* Top bar: logo, navigation, icon */
 .topbar {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "logo icon" "nav nav";
   align-items: center;
-  gap: 16px;
+  gap: 0 16px;
   max-width: var(--page-max-width);
   margin: 0 auto;
-  padding: 12px 24px;
+  padding: 12px 24px 0;
 }
 
+.logo { grid-area: logo; justify-self: start; }
+.main-nav { grid-area: nav; }
+.icon-link { grid-area: icon; justify-self: end; }
+
 .logo,
-.topbar nav a,
-.topbar .meta {
+.main-nav a,
+.site-footer a {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
@@ -66,44 +75,82 @@ a:focus-visible {
 .logo { gap: 10px; color: var(--color-bone-white); }
 .logo svg { width: 18px; height: 18px; }
 
-.topbar nav { display: flex; align-items: center; gap: 24px; }
-.topbar nav a,
-.topbar .meta { color: var(--color-ash-gray); }
-.topbar nav a:hover { color: var(--color-bone-white); }
-.topbar .meta { display: none; }
+.main-nav {
+  display: flex;
+  justify-content: center;
+  gap: 0 24px;
+}
 
+.main-nav a { color: var(--color-ash-gray); }
+.main-nav a:hover { color: var(--color-bone-white); }
+
+.icon-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  color: var(--color-ash-gray);
+}
+
+.icon-link:hover { color: var(--color-bone-white); }
+.icon-link svg { width: 22px; height: 22px; }
+
+/* Faint triangle field, fixed to the screen so it stays constant while the page scrolls */
+main { position: relative; }
+
+.ambient {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.hero,
+.how { position: relative; z-index: 1; }
+
+/* Hero: title, text, two actions, small text */
 .hero {
   max-width: var(--page-max-width);
   margin: 0 auto;
-  min-height: calc(100svh - 68px);
-  display: grid;
-  grid-template-columns: 1fr;
-  align-content: center;
-  gap: 36px;
-  padding: 24px 24px 48px;
-}
-
-.label {
-  margin: 0 0 18px;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.025em;
-  text-transform: uppercase;
-  color: var(--color-saffron-spark);
+  padding: 24px 24px 0;
+  text-align: center;
 }
 
 h1 {
-  margin: 0 0 30px;
+  margin: 0 0 24px;
   font-size: var(--text-display);
   font-weight: 400;
   line-height: 1.02;
   letter-spacing: -0.04em;
 }
 
+h1 .signal {
+  font-family: var(--font-signal);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--color-saffron-spark);
+  animation: signal var(--pulse) ease-in-out infinite;
+}
+
+@keyframes signal {
+  0%, 100% { opacity: 0.72; }
+  50% { opacity: 1; }
+}
+
 .lede {
-  margin: 0 0 36px;
-  max-width: 480px;
-  color: var(--color-bone-white);
+  margin: 0 auto 28px;
+  max-width: 520px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
 }
 
 .button {
@@ -119,25 +166,64 @@ h1 {
   letter-spacing: 0.025em;
   text-transform: uppercase;
   text-decoration: none;
+  border: 1px solid transparent;
   border-radius: var(--radius-button);
 }
 
 .button:hover { background: var(--color-iris-hover); }
 
-.button:focus-visible {
-  outline: 2px solid var(--color-saffron-spark);
-  outline-offset: 3px;
+.button.ghost {
+  background: transparent;
+  border-color: var(--color-ash-gray);
+}
+
+.button.ghost:hover {
+  background: transparent;
+  border-color: var(--color-bone-white);
 }
 
 .note {
-  margin: 18px 0 0;
+  margin: 24px auto 0;
+  max-width: 520px;
   font-size: 12px;
   font-weight: 400;
   color: var(--color-ash-gray);
 }
 
-.scene { width: 100%; }
-.scene svg { display: block; width: 100%; height: auto; overflow: visible; }
+/* Stage: the scene and the rover, pinned to the bottom of the screen so they travel
+   with the scroll. The spacer keeps the same gap in the page flow. */
+.stage-spacer {
+  height: var(--stage-h);
+  margin-top: 12px;
+}
+
+.has-stage .site-footer { padding-bottom: calc(48px + var(--stage-h)); }
+
+.stage {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  max-width: 1440px;
+  height: var(--stage-h);
+  margin: 0 auto;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 10%, #000 90%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 10%, #000 90%, transparent);
+}
+
+.stage svg { display: block; width: 100%; height: 100%; }
+
+/* The background scene follows the page's scroll progress, fully visible at the top
+   and gone at the bottom. landing.js sets --scroll (0 at the top, 1 at the bottom)
+   on the root element. Without JS the scene is simply visible. */
+.bg { opacity: calc(1 - var(--scroll, 0)); }
+
+.draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: var(--scroll, 0);
+}
 
 .pulse { animation: pulse var(--pulse) ease-in-out infinite; }
 .tw { animation: twinkle 4s ease-in-out infinite; }
@@ -153,34 +239,172 @@ h1 {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  h1 .signal { animation: none; opacity: 1; }
   .pulse { animation: none; opacity: 0.85; }
   .tw { animation: none; opacity: 0.5; }
 }
 
-@media (min-width: 600px) {
-  .topbar .meta { display: inline-flex; }
-}
-
-@media (min-width: 900px) {
-  .hero {
-    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
-    align-items: center;
-    gap: 48px;
-    padding: 24px 24px 72px;
+@media (min-width: 700px) {
+  .topbar {
+    grid-template-columns: 1fr auto 1fr;
+    grid-template-areas: "logo nav icon";
+    padding-top: 12px;
   }
 }
 
+/* Text that scrolls over the pinned scene gets a soft black halo so it stays readable */
+.how,
+.bp { text-shadow: 0 0 6px #000, 0 0 14px #000; }
+
+/* How it works */
+.how {
+  max-width: var(--page-max-width);
+  margin: 0 auto;
+  padding: 96px 24px 60px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 48px;
+  scroll-margin-top: 24px;
+}
+
+.how h2 {
+  margin: 0;
+  font-size: clamp(2.75rem, 7vw, 4.875rem);
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+}
+
+.steps { margin: 0; padding: 0; list-style: none; max-width: 520px; }
+.steps li { margin: 0 0 30px; }
+
+.steps .step-name {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  color: var(--color-saffron-spark);
+}
+
+.steps p { margin: 0; }
+
+.status {
+  margin: 36px 0 0;
+  max-width: 520px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-ash-gray);
+}
+
+@media (min-width: 900px) {
+  .how { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 48px; }
+}
+
+/* Blueprint page */
+.main-nav a[aria-current="page"] { color: var(--color-bone-white); }
+
+.hero,
+.how,
+.bp { position: relative; z-index: 1; }
+
+.bp {
+  max-width: var(--page-max-width);
+  margin: 0 auto;
+  padding: 60px 24px;
+}
+
+.bp-intro { padding-top: 48px; }
+.bp-last { padding-bottom: 96px; }
+
+.bp h1 {
+  margin: 0 0 24px;
+  font-size: var(--text-display);
+  font-weight: 400;
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+}
+
+.bp h2 {
+  margin: 0 0 18px;
+  max-width: 720px;
+  font-size: clamp(2.25rem, 5vw, 3.5rem);
+  font-weight: 400;
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+}
+
+.bp-text { margin: 0; max-width: 560px; }
+.actions-left { margin: 36px 0 0; }
+
+.diagram {
+  margin-top: 36px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.diagram:focus-visible { outline: 2px solid var(--color-saffron-spark); outline-offset: 4px; }
+
+.diagram svg { display: block; width: 100%; min-width: 760px; height: auto; }
+
+.diagram .t { fill: var(--color-bone-white); font-size: 14px; font-weight: 600; }
+.diagram .s { fill: var(--color-ash-gray); font-size: 12px; font-weight: 400; }
+
+.diagram .grp {
+  fill: var(--color-saffron-spark);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.diagram .bx,
+.diagram .node { fill: #000; stroke-width: 1.5; }
+.diagram .zone { fill: none; stroke-opacity: 0.5; stroke-dasharray: 4 6; stroke-width: 1.5; }
+
+.diagram .v { stroke: var(--color-electric-iris); }
+.diagram .g { stroke: var(--color-deep-verdant); }
+.diagram .a { stroke: var(--color-saffron-spark); }
+.diagram .dim { stroke: var(--color-ash-gray); }
+
+.diagram .ln { fill: none; stroke: var(--color-ash-gray); stroke-width: 1.5; }
+.diagram .loop { stroke-dasharray: 5 5; }
+.diagram .loop-a { stroke: var(--color-saffron-spark); stroke-dasharray: 5 5; }
+
+.diagram .tree {
+  margin: 0;
+  min-width: 760px;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.75;
+  color: var(--color-silver-mist);
+}
+
+/* Stub pages */
 .page {
   max-width: 40rem;
-  min-height: calc(100svh - 68px);
+  min-height: calc(100svh - 160px);
   margin: 0 auto;
   padding: 24px;
   display: grid;
   align-content: center;
 }
 
-.page h1 { font-size: clamp(3rem, 12vw, 4.875rem); }
+.label {
+  margin: 0 0 18px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  color: var(--color-saffron-spark);
+}
 
+.page h1 { font-size: clamp(3rem, 12vw, 4.875rem); }
+.page .lede { margin: 0 0 36px; }
+
+/* Footer */
 .site-footer {
   max-width: var(--page-max-width);
   margin: 0 auto;
@@ -200,21 +424,10 @@ h1 {
 }
 
 .site-footer nav { display: flex; flex-wrap: wrap; gap: 0 24px; }
-
-.site-footer a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.025em;
-  text-transform: uppercase;
-  text-decoration: none;
-  color: var(--color-ash-gray);
-}
-
+.site-footer a { color: var(--color-ash-gray); }
 .site-footer a:hover { color: var(--color-bone-white); }
 
+/* Terms and privacy */
 .doc {
   max-width: 44rem;
   margin: 0 auto;

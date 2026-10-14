@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blueprint | Still here</title>
+  <meta name="description" content="How the Still here rescue rover fits together, the order it gets built in, and who owns what.">
+  <script>document.documentElement.classList.add('js');</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@200;400;600&family=Instrument+Serif:ital@1&display=swap">
+  <link rel="stylesheet" href="landing.css">
+  <script src="landing.js" defer></script>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </marker>
+    </defs>
+  </svg>
+
+  <header class="topbar">
+    <a class="logo" href="index.html">
+      <svg viewBox="0 0 18 18" aria-hidden="true"><polygon points="9,1.5 16.5,15.5 1.5,15.5" fill="#8052ff"/></svg>
+      Still here
+    </a>
+    <nav class="main-nav" aria-label="Main">
+      <a href="index.html#how">How it works</a>
+      <a href="blueprint.html" aria-current="page">Blueprint</a>
+      <a href="https://github.com/abhaykrishnagiridhar/still-here">Repo</a>
+    </nav>
+    <a class="icon-link" href="https://github.com/abhaykrishnagiridhar/still-here" aria-label="Still here on GitHub">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    </a>
+  </header>
+
+  <main>
+    <svg class="ambient" id="ambient" aria-hidden="true" focusable="false"></svg>
+
+    <section class="bp bp-intro" aria-labelledby="bp-title">
+      <p class="label">Project blueprint</p>
+      <h1 id="bp-title">The <span class="signal">blueprint.</span></h1>
+      <p class="bp-text">How the pieces fit, what a full run looks like, the order everything gets built in, and who owns what.</p>
+    </section>
+
+    <section class="bp" aria-labelledby="sys-h">
+      <p class="label">System</p>
+      <h2 id="sys-h">The body and the brain</h2>
+      <p class="bp-text">The rover is the body. It sees, moves, and keeps a copy of the approved plan. The laptop is the brain. It finds the blocks, plans the order, and shows the operator what it is about to do.</p>
+      <div class="diagram" tabindex="0" role="region" aria-label="System diagram, scrolls sideways on small screens">
+        <svg viewBox="0 0 960 450" role="img" aria-labelledby="sys-t sys-d">
+          <title id="sys-t">System diagram</title>
+          <desc id="sys-d">The rover holds the camera, sensors, a stored plan, the arm and the wheels. The laptop holds perception, the planner and the operator web page. Video and sensor data go from rover to laptop. The approved plan goes back to the rover and is stored there, then drives the arm. Manual drive commands go to the wheels.</desc>
+
+          <rect class="zone v" x="20" y="20" width="380" height="420" rx="24"/>
+          <text class="grp" x="44" y="46">Rover (ESP32-S3)</text>
+          <rect class="zone g" x="560" y="20" width="380" height="420" rx="24"/>
+          <text class="grp" x="584" y="46">Laptop (Python and web page)</text>
+
+          <rect class="bx v" x="40" y="64" width="340" height="56" rx="12"/>
+          <text class="t" x="60" y="88">Camera</text>
+          <text class="s" x="60" y="106">video stream to the laptop</text>
+
+          <rect class="bx v" x="40" y="140" width="340" height="56" rx="12"/>
+          <text class="t" x="60" y="164">Sensors</text>
+          <text class="s" x="60" y="182">IR obstacle, IR flame, DHT11</text>
+
+          <rect class="bx v" x="40" y="216" width="340" height="56" rx="12"/>
+          <text class="t" x="60" y="240">Stored plan</text>
+          <text class="s" x="60" y="258">finishes alone if the link drops</text>
+
+          <rect class="bx v" x="40" y="292" width="340" height="56" rx="12"/>
+          <text class="t" x="60" y="316">Arm</text>
+          <text class="s" x="60" y="334">4 servos on a PCA9685</text>
+
+          <rect class="bx v" x="40" y="368" width="340" height="56" rx="12"/>
+          <text class="t" x="60" y="392">Wheels</text>
+          <text class="s" x="60" y="410">L298N motor driver</text>
+
+          <rect class="bx g" x="580" y="64" width="340" height="72" rx="12"/>
+          <text class="t" x="600" y="92">Perception</text>
+          <text class="s" x="600" y="112">light, blocks, layers, heat</text>
+
+          <rect class="bx g" x="580" y="176" width="340" height="72" rx="12"/>
+          <text class="t" x="600" y="204">Planner</text>
+          <text class="s" x="600" y="224">pick order, skip heavy, avoid heat</text>
+
+          <rect class="bx g" x="580" y="288" width="340" height="72" rx="12"/>
+          <text class="t" x="600" y="316">Operator web page</text>
+          <text class="s" x="600" y="336">tap survivor, see plan, final report</text>
+
+          <line class="ln" x1="380" y1="88" x2="578" y2="88" marker-end="url(#arr)"/>
+          <text class="s" x="480" y="78" text-anchor="middle">video</text>
+
+          <path class="ln" d="M380 168 H500 V118 H578" marker-end="url(#arr)"/>
+          <text class="s" x="440" y="160" text-anchor="middle">sensor data</text>
+
+          <line class="ln" x1="750" y1="136" x2="750" y2="174" marker-end="url(#arr)"/>
+
+          <line class="ln" x1="690" y1="288" x2="690" y2="250" marker-end="url(#arr)"/>
+          <text class="s" x="682" y="272" text-anchor="end">survivor tapped</text>
+
+          <line class="ln" x1="810" y1="248" x2="810" y2="286" marker-end="url(#arr)"/>
+          <text class="s" x="818" y="272">plan shown</text>
+
+          <line class="ln" x1="580" y1="232" x2="382" y2="232" marker-end="url(#arr)"/>
+          <text class="s" x="480" y="222" text-anchor="middle">approved plan</text>
+
+          <line class="ln" x1="210" y1="272" x2="210" y2="290" marker-end="url(#arr)"/>
+
+          <path class="ln" d="M580 336 H480 V396 H382" marker-end="url(#arr)"/>
+          <text class="s" x="492" y="372">manual drive</text>
+        </svg>
+      </div>
+    </section>
+
+    <section class="bp" aria-labelledby="flow-h">
+      <p class="label">One run</p>
+      <h2 id="flow-h">From the light to a clear path</h2>
+      <p class="bp-text">The dashed loops are the adapt behaviours. If the operator link drops, the rover finishes the stored plan on its own and says so on screen.</p>
+      <div class="diagram" tabindex="0" role="region" aria-label="Run flow diagram, scrolls sideways on small screens">
+        <svg viewBox="0 -30 960 220" role="img" aria-labelledby="flow-t flow-d">
+          <title id="flow-t">Run flow</title>
+          <desc id="flow-d">Six steps in a row: find, choose, plan, act, check, finish. A dashed loop returns from act to plan when a block shifts, a block is too heavy or heat appears. A second loop returns from check to act while the path is not clear.</desc>
+
+          <rect class="bx v" x="31" y="40" width="128" height="64" rx="12"/>
+          <text class="t" x="95" y="68" text-anchor="middle">Find</text>
+          <text class="s" x="95" y="88" text-anchor="middle">light, blocks, heat</text>
+
+          <rect class="bx v" x="185" y="40" width="128" height="64" rx="12"/>
+          <text class="t" x="249" y="68" text-anchor="middle">Choose</text>
+          <text class="s" x="249" y="88" text-anchor="middle">tap the survivor</text>
+
+          <rect class="bx g" x="339" y="40" width="128" height="64" rx="12"/>
+          <text class="t" x="403" y="68" text-anchor="middle">Plan</text>
+          <text class="s" x="403" y="88" text-anchor="middle">top blocks first</text>
+
+          <rect class="bx g" x="493" y="40" width="128" height="64" rx="12"/>
+          <text class="t" x="557" y="68" text-anchor="middle">Act</text>
+          <text class="s" x="557" y="88" text-anchor="middle">lift one block</text>
+
+          <rect class="bx g" x="647" y="40" width="128" height="64" rx="12"/>
+          <text class="t" x="711" y="68" text-anchor="middle">Check</text>
+          <text class="s" x="711" y="88" text-anchor="middle">is the path clear?</text>
+
+          <rect class="bx a" x="801" y="40" width="128" height="64" rx="12"/>
+          <text class="t" x="865" y="68" text-anchor="middle">Finish</text>
+          <text class="s" x="865" y="88" text-anchor="middle">safe-path report</text>
+
+          <line class="ln" x1="159" y1="72" x2="183" y2="72" marker-end="url(#arr)"/>
+          <line class="ln" x1="313" y1="72" x2="337" y2="72" marker-end="url(#arr)"/>
+          <line class="ln" x1="467" y1="72" x2="491" y2="72" marker-end="url(#arr)"/>
+          <line class="ln" x1="621" y1="72" x2="645" y2="72" marker-end="url(#arr)"/>
+          <line class="ln" x1="775" y1="72" x2="799" y2="72" marker-end="url(#arr)"/>
+
+          <path class="ln loop-a" d="M557 38 C557 -12 403 -12 403 38" marker-end="url(#arr)"/>
+          <text class="s" x="480" y="-18" text-anchor="middle">re-plan: block shifts, block too heavy, heat appears</text>
+
+          <path class="ln loop" d="M711 106 C711 152 557 152 557 106" marker-end="url(#arr)"/>
+          <text class="s" x="634" y="172" text-anchor="middle">not clear yet</text>
+        </svg>
+      </div>
+    </section>
+
+    <section class="bp" aria-labelledby="order-h">
+      <p class="label">Build order</p>
+      <h2 id="order-h">Nothing moves on until the gate passes</h2>
+      <p class="bp-text">The two-block test comes first: lift the top block off a two-block stack without disturbing the one underneath. A run passes when the bottom block moves less than 5 mm and turns less than 10 degrees. Eight passes out of ten opens the gate.</p>
+      <div class="diagram" tabindex="0" role="region" aria-label="Build order diagram, scrolls sideways on small screens">
+        <svg viewBox="0 0 960 220" role="img" aria-labelledby="order-t order-d">
+          <title id="order-t">Build order</title>
+          <desc id="order-d">Eight steps along a line. Step four, the two-block test, is a gate. If fewer than eight of ten runs pass, grip padding, block weight and camera placement are fixed and the test is run again. Steps five to eight start only after the gate passes.</desc>
+
+          <line class="ln" x1="60" y1="110" x2="900" y2="110" stroke-opacity="0.45"/>
+
+          <circle class="node v" cx="60" cy="110" r="9"/>
+          <circle class="node v" cx="180" cy="110" r="9"/>
+          <circle class="node v" cx="300" cy="110" r="9"/>
+          <polygon class="node a" points="420,92 438,110 420,128 402,110"/>
+          <circle class="node dim" cx="540" cy="110" r="9"/>
+          <circle class="node dim" cx="660" cy="110" r="9"/>
+          <circle class="node dim" cx="780" cy="110" r="9"/>
+          <circle class="node dim" cx="900" cy="110" r="9"/>
+
+          <text class="s" x="60" y="152" text-anchor="middle">1. Planner and</text>
+          <text class="s" x="60" y="168" text-anchor="middle">perception</text>
+          <text class="s" x="180" y="152" text-anchor="middle">2. Firmware</text>
+          <text class="s" x="180" y="168" text-anchor="middle">and arm</text>
+          <text class="s" x="300" y="152" text-anchor="middle">3. Calibration</text>
+          <text class="t" x="420" y="152" text-anchor="middle">4. Two-block test</text>
+          <text class="s" x="420" y="168" text-anchor="middle">8 of 10 pass</text>
+          <text class="s" x="540" y="152" text-anchor="middle">5. Tap, plan,</text>
+          <text class="s" x="540" y="168" text-anchor="middle">report</text>
+          <text class="s" x="660" y="152" text-anchor="middle">6. Adapt</text>
+          <text class="s" x="660" y="168" text-anchor="middle">behaviours</text>
+          <text class="s" x="780" y="152" text-anchor="middle">7. Heat, IR stop,</text>
+          <text class="s" x="780" y="168" text-anchor="middle">drive modes</text>
+          <text class="s" x="900" y="152" text-anchor="middle">8. Rehearse,</text>
+          <text class="s" x="900" y="168" text-anchor="middle">record video</text>
+
+          <path class="ln loop-a" d="M430 90 C470 36 370 36 410 90" marker-end="url(#arr)"/>
+          <text class="s" x="420" y="24" text-anchor="middle">fix grip, weight, camera, then retry</text>
+
+          <line class="ln" x1="540" y1="72" x2="900" y2="72" stroke-opacity="0.45"/>
+          <text class="s" x="720" y="62" text-anchor="middle">only after the gate passes</text>
+        </svg>
+      </div>
+    </section>
+
+    <section class="bp" aria-labelledby="people-h">
+      <p class="label">People</p>
+      <h2 id="people-h">Four people, one owner per area</h2>
+      <p class="bp-text">Each person edits their own files. The messages between laptop and rover are written down in one place, and changing them takes all four.</p>
+      <div class="diagram" tabindex="0" role="region" aria-label="Team diagram, scrolls sideways on small screens">
+        <svg viewBox="0 0 960 240" role="img" aria-labelledby="ppl-t ppl-d">
+          <title id="ppl-t">Who owns what</title>
+          <desc id="ppl-d">A, perception, sends blocks and positions to B, planner and web page. B sends plan messages to C, firmware, which returns step results. D, hardware and tests, supports C with the build and calibration and runs the test runs against A's detection.</desc>
+
+          <rect class="bx g" x="20" y="40" width="180" height="76" rx="12"/>
+          <text class="t" x="40" y="70">A: Perception</text>
+          <text class="s" x="40" y="92">perception.py</text>
+
+          <rect class="bx g" x="300" y="40" width="200" height="76" rx="12"/>
+          <text class="t" x="320" y="70">B: Planner and page</text>
+          <text class="s" x="320" y="92">planner, server, trial log</text>
+
+          <rect class="bx v" x="600" y="40" width="180" height="76" rx="12"/>
+          <text class="t" x="620" y="70">C: Firmware</text>
+          <text class="s" x="620" y="92">everything in firmware/</text>
+
+          <rect class="bx a" x="300" y="170" width="360" height="56" rx="12"/>
+          <text class="t" x="320" y="194">D: Hardware and tests</text>
+          <text class="s" x="320" y="212">build, calibration, the 10 trial runs</text>
+
+          <line class="ln" x1="200" y1="78" x2="298" y2="78" marker-end="url(#arr)"/>
+          <text class="s" x="250" y="68" text-anchor="middle">blocks, positions</text>
+
+          <line class="ln" x1="500" y1="62" x2="598" y2="62" marker-end="url(#arr)"/>
+          <text class="s" x="550" y="52" text-anchor="middle">plan messages</text>
+
+          <line class="ln" x1="598" y1="96" x2="502" y2="96" marker-end="url(#arr)"/>
+          <text class="s" x="550" y="114" text-anchor="middle">step results</text>
+
+          <path class="ln loop" d="M620 170 V118" marker-end="url(#arr)"/>
+          <text class="s" x="630" y="146">build, calibration</text>
+
+          <path class="ln loop" d="M300 198 H110 V118" marker-end="url(#arr)"/>
+          <text class="s" x="206" y="190" text-anchor="middle">test runs</text>
+        </svg>
+      </div>
+    </section>
+
+    <section class="bp" aria-labelledby="files-h">
+      <p class="label">Project layout</p>
+      <h2 id="files-h">Where things live</h2>
+      <p class="bp-text">Three folders. A star marks a file that is planned but not written yet.</p>
+      <div class="diagram" tabindex="0" role="region" aria-label="Project file tree, scrolls sideways on small screens">
+<pre class="tree">still-here/
+  README.md                  What it is, the 8/10 gate, team rules, quick start
+  docs/
+    blueprint.md             Diagrams, build order, layout (GitHub version)
+    protocol.md              Draft message contract between laptop and rover
+    tasks.md                 Per-person checklists for A, B, C, D
+    trials.csv               Log of the 10 two-block test runs
+  laptop/
+    index.html               This website: landing page
+    blueprint.html           This page
+    control.html             Manual control (stub until the rover link exists)
+    autonomous.html          Autonomous mode (stub)
+    terms.html, privacy.html Legal pages
+    landing.css, landing.js  Site styling and the animated scene
+    models.py                Frozen data types: Block, HeatZone, PlanStep, Plan
+    test_models.py           Tests for the data types
+    config.example.toml      Rover IP, block size, pulse rate, pass thresholds
+    perception.py *          Pulsing light, ArUco blocks, layer order, heat
+    planner.py *             Top-first pick order, skip heavy blocks, avoid heat
+    server.py *              FastAPI and WebSocket link to the rover
+    calibrate.py *           Camera pixels to arm position
+    trial_log.py *           Appends runs to trials.csv, applies the 5 mm / 10 degree rule
+  firmware/
+    main.cpp                 Boot stub, grows into the rover loop
+    pins.h                   Pin map, every pin -1 until the hardware design is read
+    platformio.ini           ESP32-S3 N16R8 build settings
+    link.cpp *               Camera stream, WebSocket server, link-loss handling
+    arm.cpp *                PCA9685 servo driver, pick and drop, stored plan
+    drive.cpp *              L298N wheels, manual and auto modes, IR stop
+    sensors.cpp *            IR obstacle, IR flame and DHT11 readout</pre>
+      </div>
+    </section>
+
+    <section class="bp bp-last" aria-labelledby="cut-h">
+      <p class="label">If time runs short</p>
+      <h2 id="cut-h">What can be cut</h2>
+      <p class="bp-text">First to go: heat avoidance, then the drive modes, then the link-drop finish. Never cut the two-block test, the plan shown on screen, or the final report.</p>
+      <p class="actions-left"><a class="button" href="index.html">Back to the start</a></p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>Built for Innovation Mission 9.</p>
+    <nav aria-label="Footer">
+      <a href="https://github.com/abhaykrishnagiridhar/still-here">GitHub</a>
+      <a href="terms.html">Terms</a>
+      <a href="privacy.html">Privacy</a>
+    </nav>
+  </footer>
+</body>
+</html>

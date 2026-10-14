@@ -5,37 +5,48 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Still here | A rescue rover</title>
   <meta name="description" content="A rescue rover that finds a trapped survivor in a dark room and clears a safe path to them, one block at a time.">
+  <script>document.documentElement.classList.add('js');</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@200;400;600&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@200;400;600&family=Instrument+Serif:ital@1&display=swap">
   <link rel="stylesheet" href="landing.css">
   <script src="landing.js" defer></script>
 </head>
-<body>
+<body class="has-stage">
   <header class="topbar">
     <a class="logo" href="index.html">
       <svg viewBox="0 0 18 18" aria-hidden="true"><polygon points="9,1.5 16.5,15.5 1.5,15.5" fill="#8052ff"/></svg>
       Still here
     </a>
-    <nav aria-label="Project links">
-      <span class="meta">Innovation Mission 9</span>
-      <a href="https://github.com/abhaykrishnagiridhar/still-here">GitHub</a>
+    <nav class="main-nav" aria-label="Main">
+      <a href="#how">How it works</a>
+      <a href="blueprint.html">Blueprint</a>
+      <a href="https://github.com/abhaykrishnagiridhar/still-here">Repo</a>
     </nav>
+    <a class="icon-link" href="https://github.com/abhaykrishnagiridhar/still-here" aria-label="Still here on GitHub">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    </a>
   </header>
 
-  <main class="hero">
-    <div class="copy">
-      <h1>Still here.</h1>
-      <p class="label">Rescue rover</p>
-      <p class="lede">A rover for a room you can't see into. It finds the light, works out which blocks are safe to lift, and clears a path to whoever is underneath.</p>
-      <a class="button" href="control.html">Take control of the rover <span aria-hidden="true">&rarr;</span></a>
-      <p class="note">Manual mode. Drive and arm controls open on the next screen.</p>
-    </div>
+  <main>
+    <svg class="ambient" id="ambient" aria-hidden="true" focusable="false"></svg>
 
-    <div class="scene">
-      <svg viewBox="0 270 620 370" role="img" aria-labelledby="scene-title scene-desc">
+    <section class="hero" aria-labelledby="hero-title">
+      <h1 id="hero-title">Still <span class="signal">here.</span></h1>
+      <p class="lede">A rover for a room you can't see into. It finds the light, works out which blocks are safe to lift, and clears a path to whoever is underneath.</p>
+      <div class="actions">
+        <a class="button" href="control.html">Take control <span aria-hidden="true">&rarr;</span></a>
+        <a class="button ghost" href="autonomous.html">Autonomous mode</a>
+      </div>
+      <p class="note">Both modes open a status page for now. The rover link is still being built.</p>
+    </section>
+
+    <div class="stage-spacer" aria-hidden="true"></div>
+
+    <div class="stage" id="stage">
+      <svg viewBox="-308 250 1220 400" preserveAspectRatio="xMidYMax slice" role="img" aria-labelledby="scene-title scene-desc">
         <title id="scene-title">A dark room with a pulsing light under a collapsed stack of blocks</title>
-        <desc id="scene-desc">A small rover with a short arm and open claw faces two stacks of blocks. A third block spans them. A light pulses in the gap underneath, surrounded by scattered points of light.</desc>
+        <desc id="scene-desc">A small rover with a short arm and open claw faces two stacks of blocks. The arm reaches for the first block, grips, pulls back and lets go, over and over. A third block spans the stacks. A light pulses in the gap underneath, surrounded by scattered points of light.</desc>
         <defs>
           <radialGradient id="beam-glow" cx="50%" cy="50%" r="50%">
             <stop offset="0" stop-color="#ffb829" stop-opacity="0.85"/>
@@ -47,40 +58,101 @@
           </radialGradient>
         </defs>
 
-        <line x1="-2000" y1="520" x2="3000" y2="520" stroke="#9a9a9a" stroke-opacity="0.25" stroke-width="1"/>
-        <ellipse class="pulse" cx="380" cy="522" rx="230" ry="26" fill="url(#floor-glow)"/>
+        <g class="bg">
+          <line x1="-400" y1="520" x2="1000" y2="520" stroke="#9a9a9a" stroke-opacity="0.25" stroke-width="1"/>
+          <ellipse class="pulse" cx="380" cy="522" rx="260" ry="28" fill="url(#floor-glow)"/>
 
-        <g id="particles" aria-hidden="true"></g>
+          <g id="particles" aria-hidden="true"></g>
 
-        <circle class="pulse" cx="380" cy="500" r="90" fill="url(#beam-glow)"/>
+          <circle class="pulse" cx="380" cy="500" r="90" fill="url(#beam-glow)"/>
 
-        <g fill="#000" stroke-width="1.5" stroke-linejoin="round">
-          <rect x="170" y="430" width="150" height="90" stroke="#8052ff"/>
-          <rect x="440" y="430" width="150" height="90" stroke="#8052ff"/>
-          <rect x="185" y="348" width="115" height="82" stroke="#15846e"/>
-          <rect x="465" y="358" width="100" height="72" stroke="#15846e"/>
-          <rect x="300" y="372" width="160" height="58" stroke="#15846e"/>
+          <g fill="#000" stroke-width="1.5" stroke-linejoin="round">
+            <rect class="draw" pathLength="1" x="170" y="430" width="150" height="90" stroke="#8052ff"/>
+            <rect class="draw" pathLength="1" x="440" y="430" width="150" height="90" stroke="#8052ff"/>
+            <rect class="draw" pathLength="1" x="185" y="348" width="115" height="82" stroke="#15846e"/>
+            <rect class="draw" pathLength="1" x="465" y="358" width="100" height="72" stroke="#15846e"/>
+            <rect class="draw" pathLength="1" x="300" y="372" width="160" height="58" stroke="#15846e"/>
+          </g>
+
+          <circle class="pulse" cx="380" cy="500" r="5" fill="#ffb829"/>
         </g>
 
-        <circle class="pulse" cx="380" cy="500" r="5" fill="#ffb829"/>
+        <g class="rover">
+          <g fill="#000" stroke="#d9d9d9" stroke-width="2" stroke-linejoin="round">
+            <rect x="14" y="566" width="130" height="38" rx="6"/>
+            <circle cx="42" cy="612" r="16"/>
+            <circle cx="116" cy="612" r="16"/>
+            <rect x="92" y="546" width="30" height="20" rx="3"/>
+          </g>
 
-        <g fill="#000" stroke="#9a9a9a" stroke-width="1.5" stroke-linejoin="round">
-          <rect x="14" y="566" width="130" height="38" rx="6"/>
-          <circle cx="42" cy="612" r="16"/>
-          <circle cx="116" cy="612" r="16"/>
-          <rect x="92" y="546" width="30" height="20" rx="3"/>
-        </g>
-        <g stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">
-          <polyline points="112,566 118,508 160,474"/>
-          <line x1="160" y1="474" x2="167" y2="466"/>
-          <line x1="160" y1="474" x2="167" y2="482"/>
-        </g>
-        <g fill="#ffffff">
-          <circle cx="112" cy="566" r="4"/>
-          <circle cx="118" cy="508" r="3.5"/>
+          <g class="arm" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">
+            <g>
+              <animateTransform attributeName="transform" type="rotate" dur="5s" repeatCount="indefinite"
+                values="0 112 566;-20 112 566;-20 112 566;0 112 566;0 112 566"
+                keyTimes="0;0.35;0.5;0.85;1" calcMode="spline"
+                keySplines="0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1"/>
+              <line x1="112" y1="566" x2="118" y2="508"/>
+              <circle cx="118" cy="508" r="3.5" fill="#ffffff" stroke="none"/>
+              <g>
+                <animateTransform attributeName="transform" type="rotate" dur="5s" repeatCount="indefinite"
+                  values="0 118 508;-24 118 508;-24 118 508;0 118 508;0 118 508"
+                  keyTimes="0;0.35;0.5;0.85;1" calcMode="spline"
+                  keySplines="0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1"/>
+                <line x1="118" y1="508" x2="160" y2="474"/>
+                <g>
+                  <animateTransform attributeName="transform" type="rotate" dur="5s" repeatCount="indefinite"
+                    values="0 160 474;0 160 474;-16 160 474;-16 160 474;0 160 474"
+                    keyTimes="0;0.35;0.5;0.9;1" calcMode="spline"
+                    keySplines="0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1"/>
+                  <line x1="160" y1="474" x2="167" y2="466"/>
+                </g>
+                <g>
+                  <animateTransform attributeName="transform" type="rotate" dur="5s" repeatCount="indefinite"
+                    values="0 160 474;0 160 474;16 160 474;16 160 474;0 160 474"
+                    keyTimes="0;0.35;0.5;0.9;1" calcMode="spline"
+                    keySplines="0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1"/>
+                  <line x1="160" y1="474" x2="167" y2="482"/>
+                </g>
+              </g>
+            </g>
+            <circle cx="112" cy="566" r="4" fill="#ffffff" stroke="none"/>
+          </g>
         </g>
       </svg>
     </div>
+
+    <section class="how" id="how" aria-labelledby="how-title">
+      <h2 id="how-title">How it works</h2>
+      <div>
+        <ol class="steps">
+          <li>
+            <span class="step-name">Find</span>
+            <p>The camera picks out the pulsing light, the blocks and where they sit, and any source of heat.</p>
+          </li>
+          <li>
+            <span class="step-name">Choose</span>
+            <p>The operator taps the survivor on the screen.</p>
+          </li>
+          <li>
+            <span class="step-name">Plan</span>
+            <p>The blocks are put in order: top ones first, and the ones holding others up left alone. The plan is shown before anything moves.</p>
+          </li>
+          <li>
+            <span class="step-name">Act</span>
+            <p>The arm lifts the blocks away one at a time. The approved plan is stored on the rover.</p>
+          </li>
+          <li>
+            <span class="step-name">Adapt</span>
+            <p>If a block shifts, the plan is redone. A heavy or load-bearing block is left in place and the path goes around it. If the operator link drops, the rover finishes the stored plan on its own and says so on screen.</p>
+          </li>
+          <li>
+            <span class="step-name">Finish</span>
+            <p>The path is clear, the light keeps pulsing, and the screen shows a safe-path report.</p>
+          </li>
+        </ol>
+        <p class="status">Status: perception and planning are in progress, and the rover is not connected yet. The first thing being tested is lifting the top block off a two-block stack without moving the one underneath.</p>
+      </div>
+    </section>
   </main>
 
   <footer class="site-footer">
