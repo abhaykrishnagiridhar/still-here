@@ -9,11 +9,15 @@ import phone_bridge
 
 def test_a_drive_sample_becomes_a_normalised_wheel_command():
     bridge = phone_bridge.PhoneBridge()
+    bridge.handle({"beta": 0, "gamma": 0, "mode": "drive"}, now=0.9)  # the first sample sets the centre
 
-    packet = bridge.handle({"beta": -30, "gamma": 0, "mode": "drive"}, now=1.0)
+    for i in range(30):  # hold the tilt: the phone smoothing needs a moment to settle
+        packet = bridge.handle({"beta": -30, "gamma": 0, "mode": "drive"}, now=1.0 + i * 0.05)
 
     assert packet["kind"] == "command"
-    assert packet["message"] == {"type": "drive", "left": 1.0, "right": 1.0}
+    assert packet["message"]["type"] == "drive"
+    assert packet["message"]["left"] == pytest.approx(1.0, abs=0.01)
+    assert packet["message"]["right"] == pytest.approx(1.0, abs=0.01)
 
 
 def test_an_arm_sample_contains_the_protocol_arm_pose():
@@ -61,6 +65,14 @@ def test_the_socket_accepts_a_page_from_the_local_network():
 
     with client.websocket_connect("/phone", headers={"origin": "http://192.168.0.20:8765"}) as ws:
         ws.send_text("not json")
+
+
+def test_the_phone_page_is_served_over_plain_http():
+    response = TestClient(phone_bridge.app).get("/")
+
+    assert response.status_code == 200
+    assert "WebSocket" in response.text
+    assert "certificate" not in response.text.lower()
 
 
 def test_bad_phone_payload_is_rejected_without_emitting_a_command():

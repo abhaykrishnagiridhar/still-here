@@ -36,7 +36,7 @@ import cv2
 import numpy as np
 
 from models import Block, HeatZone
-from planner import PlanResult, plan
+from planner import PlanResult
 from route import RoutePlan
 from scale import ScaleEstimator, block_size_ok
 from scene import build_scene, decide, path_in_px, view_in_px

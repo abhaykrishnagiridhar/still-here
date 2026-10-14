@@ -110,6 +110,15 @@ flowchart LR
 still-here/
   README.md                  What it is, the 8/10 gate, team rules, quick start
   .gitignore                 Keeps firmware/secrets.h and laptop/config.toml out of git
+  vision.cpp                 C++ camera demo (scale, mm, fire); laptop/vision.py is the full version
+  planner.hpp, perception.hpp  OpenCV-free logic for vision.cpp
+  test_planner.cpp, test_perception.cpp  Tests for those headers
+  CMakeLists.txt             Builds vision.cpp and the two test programs
+  simulation/                Phone tilt to Blender digital twin
+    phone_bridge.py          Serves the phone page over http and forwards tilt to Blender
+    phone_control.html       Phone controller page
+    blender_rover.py         Blender scene driven by sim_rover.py
+    test_phone_bridge.py     Tests for the bridge
   docs/
     blueprint.md             This page: diagrams, build order, layout
     protocol.md              Draft message contract between laptop and rover
@@ -132,6 +141,8 @@ still-here/
     test_scene.py            Tests for the scene
     test_stream.py           Tests for the stream
     test_vision_pipeline.py  Whole camera pipeline on made-up pictures
+    gyro_map.py              Phone tilt to drive and arm messages
+    sim_rover.py             Software rover: same messages as the protocol, no hardware
     vision.py                Colour-blob vision demo (ported from the C++ prototype) feeding the planner
     test_vision.py           Tests for the vision demo on synthetic pictures
     server.py *              FastAPI and WebSocket link to the rover, serves the UI
@@ -143,6 +154,8 @@ still-here/
     pins.h                   Pin map, every pin -1 until the hardware design is read
     platformio.ini           ESP32-S3 N16R8 build settings, flat layout
     secrets.example.h        Wi-Fi template for the 2.4 GHz phone hotspot
+    cam_boot.cpp             Placeholder for the ESP32-CAM board (video only)
+    rover_sketch.txt         Earlier all-in-one rover sketch, reference only, not built
     link.cpp *               Camera stream and WebSocket server, link-loss handling
     arm.cpp *                PCA9685 servo driver, pick and drop, stored plan
     drive.cpp *              L298N wheels, manual and auto modes, IR stop

@@ -1,7 +1,10 @@
 """Receives phone orientation and forwards rover-protocol commands to Blender over localhost UDP.
 
-Run from ``still-here/laptop`` after installing the existing project dependencies:
-    uvicorn simulation.phone_bridge:app --host 0.0.0.0 --port 8765
+Run from the repo root (``still-here``) with the laptop virtual environment:
+    laptop/.venv/Scripts/python -m uvicorn simulation.phone_bridge:app --host 0.0.0.0 --port 8765
+Then open http://<laptop-ip>:8765/ on the phone. Plain http is used on purpose, so the page
+is not a "secure context": on Chrome for Android set chrome://flags/#unsafely-treat-insecure-origin-as-secure
+to that address, or the browser will not give the page tilt readings.
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
 
 import sys
 
@@ -25,6 +29,7 @@ from gyro_map import GyroSession
 
 BLENDER_HOST = "127.0.0.1"
 BLENDER_PORT = 8766
+PHONE_PAGE = Path(__file__).resolve().parent / "phone_control.html"
 WS_POLICY_VIOLATION = 1008
 
 
@@ -64,6 +69,12 @@ def origin_allowed(origin: str | None) -> bool:
 
 
 app = FastAPI(title="STILL HERE phone-to-Blender bridge")
+
+
+@app.get("/")
+def phone_page() -> FileResponse:
+    """The tilt controller. Open http://<laptop-ip>:8765/ on the phone, on the same Wi-Fi."""
+    return FileResponse(PHONE_PAGE)
 
 
 @app.get("/health")

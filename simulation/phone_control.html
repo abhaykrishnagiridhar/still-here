@@ -92,11 +92,8 @@
     }
     setInterval(() => {
       if (!enabled) return;
-      if (!window.isSecureContext) {
-        motionStatus.textContent = 'Tilt blocked: open the HTTPS address after installing the local certificate.';
-        motionStatus.className = 'status bad';
-      } else if (Date.now() - lastMotionAt > 1500) {
-        motionStatus.textContent = 'No tilt samples. Check browser motion permissions and that this phone has motion sensors.';
+      if (Date.now() - lastMotionAt > 1500) {
+        motionStatus.textContent = 'No tilt samples. Check browser motion permissions and that this phone has motion sensors. On Chrome for Android, plain http pages need chrome://flags/#unsafely-treat-insecure-origin-as-secure set to this page address.';
         motionStatus.className = 'status bad';
       }
     }, 500);

@@ -16,7 +16,9 @@
 // ---------------- WIFI SETTINGS ----------------
 
 const char* AP_SSID = "STILL_HERE_ROVER";
-const char* AP_PASSWORD = "Rescue123";  // Change this password
+// Reference sketch, not built by PlatformIO. Put the real password in firmware/secrets.h
+// (copied from secrets.example.h, git-ignored), never in this file.
+const char* AP_PASSWORD = "change-me-before-flashing";
 
 
 // ---------------- HW-095 MOTOR PINS ----------------

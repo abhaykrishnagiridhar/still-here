@@ -16,3 +16,5 @@ build*/
 *.ilk
 *.pdb
 .coverage
+.local-tls/
+.ruff_cache/
