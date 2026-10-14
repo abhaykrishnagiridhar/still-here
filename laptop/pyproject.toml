@@ -16,7 +16,7 @@ dev = ["pytest", "pytest-cov"]
 firmware = ["platformio", "esptool", "pyserial"]
 
 [tool.setuptools]
-py-modules = ["models", "planner", "route", "scale", "scene", "stream", "vision"]
+py-modules = ["models", "planner", "route", "vision"]
 
 [tool.pytest.ini_options]
 testpaths = ["."]
