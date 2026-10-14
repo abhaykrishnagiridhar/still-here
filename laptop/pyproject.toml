@@ -1,0 +1,21 @@
+[project]
+name = "still-here-laptop"
+version = "0.1.0"
+description = "Vision, planner and API server for the STILL HERE rescue rover"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "opencv-contrib-python",
+    "fastapi",
+    "uvicorn[standard]",
+    "websockets",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools]
+py-modules = ["models"]
+
+[tool.pytest.ini_options]
+testpaths = ["."]

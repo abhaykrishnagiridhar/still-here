@@ -1,0 +1,17 @@
+# Copy to config.toml (git-ignored) and edit.
+
+[rover]
+host = "192.168.0.50"      # IP the ESP32 gets on the phone hotspot
+ws_port = 81
+stream_path = "/stream"
+
+[blocks]
+size_mm = 35               # 3 to 4 cm cubes
+heavy_marker_ids = [9]     # markers that mean "heavy / load-bearing"
+
+[survivor_light]
+pulse_hz = 1.5             # expected pulse rate of the survivor LED
+
+[test]
+max_shift_mm = 5           # bottom block must move less than this
+max_rotation_deg = 10      # and rotate less than this
