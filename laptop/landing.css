@@ -17,11 +17,18 @@
   --page-max-width: 1280px;
   --pulse: 1.4s;
   --stage-h: clamp(235px, 28vw, 380px);
+  --rover-h: 124px;
 }
 
 * { box-sizing: border-box; }
 
-html { background: var(--color-void); scroll-behavior: smooth; }
+html {
+  background: var(--color-void);
+  scroll-behavior: smooth;
+  color-scheme: dark;
+}
+
+.diagram { scrollbar-width: thin; scrollbar-color: #3a3a3a transparent; }
 
 body {
   margin: 0;
@@ -197,7 +204,13 @@ h1 .signal {
   margin-top: 12px;
 }
 
-.has-stage .site-footer { padding-bottom: calc(48px + var(--stage-h)); }
+/* On narrow screens the pinned rover sits under the footer text, so it needs its own room.
+   From 900px up the rover is clear of the text and nothing is reserved. */
+.has-stage .site-footer { padding-bottom: var(--rover-h); }
+
+@media (min-width: 900px) {
+  .has-stage .site-footer { padding-bottom: 0; }
+}
 
 .stage {
   position: fixed;
@@ -260,10 +273,10 @@ h1 .signal {
 .how {
   max-width: var(--page-max-width);
   margin: 0 auto;
-  padding: 96px 24px 60px;
+  padding: 48px 24px 12px;
   display: grid;
   grid-template-columns: 1fr;
-  gap: 48px;
+  gap: 36px;
   scroll-margin-top: 24px;
 }
 
@@ -276,7 +289,7 @@ h1 .signal {
 }
 
 .steps { margin: 0; padding: 0; list-style: none; max-width: 520px; }
-.steps li { margin: 0 0 30px; }
+.steps li { margin: 0 0 24px; }
 
 .steps .step-name {
   display: block;
@@ -316,7 +329,7 @@ h1 .signal {
 }
 
 .bp-intro { padding-top: 48px; }
-.bp-last { padding-bottom: 96px; }
+.bp-last { padding-bottom: 36px; }
 
 .bp h1 {
   margin: 0 0 24px;
@@ -405,26 +418,31 @@ h1 .signal {
 .page .lede { margin: 0 0 36px; }
 
 /* Footer */
+/* Nothing sits below the footer text: the page ends on it. */
 .site-footer {
   max-width: var(--page-max-width);
   margin: 0 auto;
-  padding: 36px 24px 48px;
+  padding: 36px 24px 0;
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  align-items: center;
-  gap: 12px 24px;
+  align-items: flex-end;
+  gap: 0 24px;
 }
 
 .site-footer p {
   margin: 0;
   font-size: 12px;
   font-weight: 400;
+  line-height: 1.2;
   color: var(--color-ash-gray);
 }
 
 .site-footer nav { display: flex; flex-wrap: wrap; gap: 0 24px; }
-.site-footer a { color: var(--color-ash-gray); }
+.site-footer a {
+  align-items: flex-end;
+  color: var(--color-ash-gray);
+}
 .site-footer a:hover { color: var(--color-bone-white); }
 
 /* Terms and privacy */

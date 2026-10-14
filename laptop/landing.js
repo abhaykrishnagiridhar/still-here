@@ -169,6 +169,23 @@
     });
   }
 
+  /* Arriving on a page always starts at the top, so links like "Back to the start" never
+     land partway down because the browser restored an old scroll position. A reload keeps
+     its place, and a link with a #hash goes to that section. */
+  function startAtTop() {
+    if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+
+    var entries = window.performance && performance.getEntriesByType
+      ? performance.getEntriesByType('navigation')
+      : [];
+    var isReload = entries.length > 0 && entries[0].type === 'reload';
+
+    if (!isReload && !window.location.hash) {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    }
+  }
+
+  startAtTop();
   sceneParticles();
   ambientParticles();
   linkFadeToScroll();
