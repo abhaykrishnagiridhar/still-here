@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Still here | A rescue rover</title>
+  <meta name="description" content="A rescue rover that finds a trapped survivor in a dark room and clears a safe path to them, one block at a time.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@200;400;600&display=swap">
+  <link rel="stylesheet" href="landing.css">
+  <script src="landing.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="logo" href="index.html">
+      <svg viewBox="0 0 18 18" aria-hidden="true"><polygon points="9,1.5 16.5,15.5 1.5,15.5" fill="#8052ff"/></svg>
+      Still here
+    </a>
+    <nav aria-label="Project links">
+      <span class="meta">Innovation Mission 9</span>
+      <a href="https://github.com/abhaykrishnagiridhar/still-here">GitHub</a>
+    </nav>
+  </header>
+
+  <main class="hero">
+    <div class="copy">
+      <h1>Still here.</h1>
+      <p class="label">Rescue rover</p>
+      <p class="lede">A rover for a room you can't see into. It finds the light, works out which blocks are safe to lift, and clears a path to whoever is underneath.</p>
+      <a class="button" href="control.html">Take control of the rover <span aria-hidden="true">&rarr;</span></a>
+      <p class="note">Manual mode. Drive and arm controls open on the next screen.</p>
+    </div>
+
+    <div class="scene">
+      <svg viewBox="0 270 620 370" role="img" aria-labelledby="scene-title scene-desc">
+        <title id="scene-title">A dark room with a pulsing light under a collapsed stack of blocks</title>
+        <desc id="scene-desc">A small rover with a short arm and open claw faces two stacks of blocks. A third block spans them. A light pulses in the gap underneath, surrounded by scattered points of light.</desc>
+        <defs>
+          <radialGradient id="beam-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0" stop-color="#ffb829" stop-opacity="0.85"/>
+            <stop offset="1" stop-color="#ffb829" stop-opacity="0"/>
+          </radialGradient>
+          <radialGradient id="floor-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0" stop-color="#ffb829" stop-opacity="0.3"/>
+            <stop offset="1" stop-color="#ffb829" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+
+        <line x1="-2000" y1="520" x2="3000" y2="520" stroke="#9a9a9a" stroke-opacity="0.25" stroke-width="1"/>
+        <ellipse class="pulse" cx="380" cy="522" rx="230" ry="26" fill="url(#floor-glow)"/>
+
+        <g id="particles" aria-hidden="true"></g>
+
+        <circle class="pulse" cx="380" cy="500" r="90" fill="url(#beam-glow)"/>
+
+        <g fill="#000" stroke-width="1.5" stroke-linejoin="round">
+          <rect x="170" y="430" width="150" height="90" stroke="#8052ff"/>
+          <rect x="440" y="430" width="150" height="90" stroke="#8052ff"/>
+          <rect x="185" y="348" width="115" height="82" stroke="#15846e"/>
+          <rect x="465" y="358" width="100" height="72" stroke="#15846e"/>
+          <rect x="300" y="372" width="160" height="58" stroke="#15846e"/>
+        </g>
+
+        <circle class="pulse" cx="380" cy="500" r="5" fill="#ffb829"/>
+
+        <g fill="#000" stroke="#9a9a9a" stroke-width="1.5" stroke-linejoin="round">
+          <rect x="14" y="566" width="130" height="38" rx="6"/>
+          <circle cx="42" cy="612" r="16"/>
+          <circle cx="116" cy="612" r="16"/>
+          <rect x="92" y="546" width="30" height="20" rx="3"/>
+        </g>
+        <g stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">
+          <polyline points="112,566 118,508 160,474"/>
+          <line x1="160" y1="474" x2="167" y2="466"/>
+          <line x1="160" y1="474" x2="167" y2="482"/>
+        </g>
+        <g fill="#ffffff">
+          <circle cx="112" cy="566" r="4"/>
+          <circle cx="118" cy="508" r="3.5"/>
+        </g>
+      </svg>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p>Built for Innovation Mission 9.</p>
+    <nav aria-label="Footer">
+      <a href="https://github.com/abhaykrishnagiridhar/still-here">GitHub</a>
+      <a href="terms.html">Terms</a>
+      <a href="privacy.html">Privacy</a>
+    </nav>
+  </footer>
+</body>
+</html>
