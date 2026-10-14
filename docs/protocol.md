@@ -35,7 +35,7 @@ A plan step: `{"id": 1, "action": "pick" | "drop", "x": 0, "y": 0, "z": 0}` (arm
 | type | Fields | Meaning |
 |---|---|---|
 | `state` | `t`, `mode`, `arm`, `plan_id`, `step_id`, `status` | Sent at 5 Hz |
-| `sensors` | `ir_obstacle` (left, right), `ir_flame` (left, right), `dht` (temp_c, hum_pct) | Sent at 2 Hz |
+| `sensors` | `ir_obstacle` (left, right), `ir_flame` (left, right), `dht` (temp_c, hum_pct), `battery_v` (pack volts, see `docs/power.md`) | Sent at 2 Hz |
 | `step_done` | `plan_id`, `step_id`, `ok`, `reason` | A plan step finished or failed |
 | `event` | `code`, `detail` | Notable events, e.g. `link_lost`, `plan_finished` |
 

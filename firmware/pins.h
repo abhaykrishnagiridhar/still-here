@@ -28,3 +28,7 @@ constexpr int PIN_IR_OBSTACLE_R = -1;
 constexpr int PIN_IR_FLAME_L = -1;
 constexpr int PIN_IR_FLAME_R = -1;
 constexpr int PIN_DHT = -1;
+
+// Pack voltage: 2S pack positive -> 100k -> this pin -> 33k -> GND (see docs/power.md).
+// Use an ADC1 pin, ADC2 does not work reliably while Wi-Fi is on.
+constexpr int PIN_BATT_ADC = -1;

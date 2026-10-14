@@ -37,7 +37,8 @@ Four people, one owner per area. The gate comes first: nothing from Stage 2 or 3
 
 ## D, Hardware and tests
 
-- [ ] Finish build, separate servo rail with a capacitor, check the power bank under load
+- [ ] Build the two-supply power system in `docs/power.md` (power bank for logic, 18650 pack for motors and servos) and pass its test plan
+- [ ] Decide what to do about the "500 series" motor (see Open items in `docs/power.md`)
 - [ ] Calibration: camera pixels to arm frame, one command to re-run
 - [ ] Print markers, make blocks (3 to 4 cm), one heavy block
 - [ ] Run and log the 10 trials

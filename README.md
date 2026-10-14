@@ -83,6 +83,8 @@ still-here/
   docs/
     blueprint.md             Diagrams, build order, layout
     protocol.md              Draft message contract between laptop and rover
+    power.md                 Two-supply power design, parts, wiring and test plan
+    power-supply-improvements.md  What we changed in the power supply and why, with the diagram
     tasks.md                 Per-person checklists for A, B, C, D
     trials.csv               Log of the 10 two-block test runs
   laptop/
