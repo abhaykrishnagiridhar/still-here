@@ -1,5 +1,9 @@
 """Contract tests for the browser-to-Blender gyro bridge."""
 
+import pytest
+from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
+
 import phone_bridge
 
 
@@ -23,6 +27,40 @@ def test_an_arm_sample_contains_the_protocol_arm_pose():
     assert packet["message"]["type"] == "arm_pose"
     assert packet["message"]["elbow"] == -80.0
     assert packet["message"]["gripper"] == 0.0
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [None, "", "http://localhost:3000", "http://127.0.0.1:8765", "http://192.168.0.20:8765",
+     "http://10.0.0.5", "http://[::1]:8765"],
+)
+def test_pages_from_this_machine_or_the_local_network_are_allowed(origin):
+    assert phone_bridge.origin_allowed(origin)
+
+
+@pytest.mark.parametrize(
+    "origin",
+    ["https://evil.example", "http://8.8.8.8", "http://localhost.evil.example", "null", "http://"],
+)
+def test_pages_from_the_internet_are_refused(origin):
+    assert not phone_bridge.origin_allowed(origin)
+
+
+def test_the_socket_closes_a_browser_page_from_another_site():
+    client = TestClient(phone_bridge.app)
+
+    with pytest.raises(WebSocketDisconnect) as refused:
+        with client.websocket_connect("/phone", headers={"origin": "https://evil.example"}):
+            pass
+
+    assert refused.value.code == 1008
+
+
+def test_the_socket_accepts_a_page_from_the_local_network():
+    client = TestClient(phone_bridge.app)
+
+    with client.websocket_connect("/phone", headers={"origin": "http://192.168.0.20:8765"}) as ws:
+        ws.send_text("not json")
 
 
 def test_bad_phone_payload_is_rejected_without_emitting_a_command():

@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov"]
+dev = ["pytest", "pytest-cov", "httpx2"]
 firmware = ["platformio", "esptool", "pyserial"]
 
 [tool.setuptools]
