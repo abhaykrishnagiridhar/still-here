@@ -9,3 +9,4 @@ laptop/config.toml
 firmware/secrets.h
 frames/
 *.log
+design/
