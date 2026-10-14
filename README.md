@@ -9,13 +9,105 @@ Built for Innovation Mission 9, "Intelligent Robotics: Autonomous Object Interac
 - **Laptop** finds the light and the blocks, plans which block to remove first, and shows everything in a web UI.
 - The two talk over Wi-Fi (phone hotspot, 2.4 GHz) using the messages in `docs/protocol.md`.
 
-## Folders
+```mermaid
+flowchart LR
+    subgraph Rover["Rover (ESP32-S3)"]
+        CAM["Camera"]
+        SEN["IR obstacle, IR flame, DHT11"]
+        BUF["Stored plan"]
+        ARM["Arm: 4 servos on PCA9685"]
+        WHL["Wheels: L298N"]
+    end
 
-| Folder | Contents |
-|---|---|
-| `laptop/` | Python code: vision, planner, API server, shared data models |
-| `firmware/` | ESP32-S3 code (PlatformIO) |
-| `docs/` | Protocol, task split, trial log, the original brief |
+    subgraph Laptop["Laptop (Python + web UI)"]
+        PER["Perception<br/>light, blocks, layers, heat"]
+        PLAN["Planner<br/>pick order, skip heavy blocks, avoid heat"]
+        UI["Operator web UI<br/>tap survivor, see plan, final report"]
+    end
+
+    CAM -->|video| PER
+    SEN -->|sensor data| PER
+    PER -->|blocks and positions| PLAN
+    UI -->|survivor tapped| PLAN
+    PLAN -->|plan shown| UI
+    PLAN -->|approved plan| BUF
+    BUF -->|pick and drop steps| ARM
+    UI -->|manual drive| WHL
+    BUF -.->|finishes alone if link drops| ARM
+```
+
+## What happens in the demo
+
+```mermaid
+flowchart TD
+    A["Find<br/>light, blocks, heat"] --> B["Operator taps survivor"]
+    B --> C["Planner orders the blocks<br/>top first, supports untouched"]
+    C --> D["Plan shown on screen<br/>and approved"]
+    D --> E["Plan stored on the rover"]
+    E --> F["Arm removes blocks one by one"]
+    F --> G{"Path clear?"}
+    G -->|yes| H["Safe-path report<br/>light keeps pulsing, one chime"]
+    G -->|no| F
+
+    F -.->|block shifts| C
+    F -.->|heavy block in the way| C
+    F -.->|heat source appears| C
+    F -.->|link drops| I["Rover finishes the stored plan alone<br/>and reports it"]
+    I --> G
+```
+
+## Build order
+
+```mermaid
+flowchart LR
+    S0["0. Repo, protocol, models<br/>(done)"] --> S1["1. Planner and perception<br/>on saved photos"]
+    S1 --> S2["2. Firmware and arm<br/>on the bench"]
+    S2 --> S3["3. Calibration<br/>camera pixels to arm position"]
+    S3 --> G{"4. Two-block test<br/>10 runs, at least 8 pass?"}
+    G -->|no| FIX["Fix in order:<br/>grip padding, block weight,<br/>camera placement"]
+    FIX --> G
+    G -->|yes| S5["5. Tap-to-select,<br/>plan on screen, report"]
+    S5 --> S6["6. Adapt behaviours"]
+    S6 --> S7["7. Heat, IR stop,<br/>drive modes"]
+    S7 --> S8["8. Rehearse and record<br/>a backup video"]
+```
+
+The full blueprint, including the team diagram and what can be cut, is in [docs/blueprint.md](docs/blueprint.md).
+
+## Project layout
+
+```
+still-here/
+  README.md                  What it is, the 8/10 gate, team rules, quick start
+  .gitignore                 Keeps firmware/secrets.h and laptop/config.toml out of git
+  docs/
+    blueprint.md             Diagrams, build order, layout
+    protocol.md              Draft message contract between laptop and rover
+    tasks.md                 Per-person checklists for A, B, C, D
+    trials.csv               Log of the 10 two-block test runs
+  laptop/
+    models.py                Frozen data types: Block, HeatZone, PlanStep, Plan
+    test_models.py           Tests for the data types
+    pyproject.toml           Python dependencies (OpenCV, FastAPI, pytest)
+    config.example.toml      Rover IP, block size, pulse rate, pass thresholds
+    perception.py *          Pulsing light, ArUco blocks, layer order, heat
+    planner.py *             Top-first pick order, skip heavy blocks, avoid heat
+    server.py *              FastAPI and WebSocket link to the rover, serves the UI
+    calibrate.py *           Camera pixels to arm position, one command to re-run
+    trial_log.py *           Appends runs to trials.csv, applies the 5 mm / 10 degree rule
+    ui.html, ui.ts *         Operator page: tap survivor, see plan, final report
+  firmware/
+    main.cpp                 Boot stub, grows into the rover loop
+    pins.h                   Pin map, every pin -1 until the hardware design is read
+    platformio.ini           ESP32-S3 N16R8 build settings, flat layout
+    secrets.example.h        Wi-Fi template for the 2.4 GHz phone hotspot
+    link.cpp *               Camera stream and WebSocket server, link-loss handling
+    arm.cpp *                PCA9685 servo driver, pick and drop, stored plan
+    drive.cpp *              L298N wheels, manual and auto modes, IR stop
+    sensors.cpp *            IR obstacle, IR flame and DHT11 readout
+```
+
+`*` = planned, not written yet.
 
 ## The one thing to do first
 
