@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>STILL HERE — rover control</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #0d1117; color: #f5f7fa; }
+    body { max-width: 36rem; margin: 0 auto; padding: 1.25rem; }
+    h1 { font-size: 1.4rem; margin: 0 0 .25rem; } p { color: #b6c2cf; }
+    .card { background: #171e27; border: 1px solid #344253; border-radius: .8rem; padding: 1rem; margin: 1rem 0; }
+    button, input { font: inherit; } button { min-height: 3.1rem; padding: .75rem 1rem; border: 0; border-radius: .55rem; font-weight: 700; }
+    #enable { width: 100%; background: #67e8a5; color: #082114; } #stop { width: 100%; background: #ef6b73; color: #2b060a; }
+    .modes { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; margin: .8rem 0; }
+    .modes button { background: #263241; color: #f5f7fa; } .modes button.active { outline: 3px solid #67e8a5; }
+    label { display: block; font-weight: 700; margin-top: .9rem; } input { width: 100%; margin-top: .5rem; accent-color: #67e8a5; }
+    .status { font-variant-numeric: tabular-nums; } .good { color: #67e8a5; } .bad { color: #ff9b9b; }
+  </style>
+</head>
+<body>
+  <h1>Rover control</h1>
+  <p>Hold the phone flat, screen up. Tilt forward to drive forward; tilt left/right to steer.</p>
+  <section class="card">
+    <button id="enable" type="button">Enable phone controls</button>
+    <p id="status" class="status bad" role="status">Not connected</p>
+    <p id="motion-status" class="status" role="status">Waiting for phone motion</p>
+    <button id="calibrate" type="button">Centre tilt</button>
+  </section>
+  <section class="card">
+    <div class="modes" aria-label="Control mode">
+      <button id="drive" class="active" type="button">Drive</button>
+      <button id="arm" type="button">Arm</button>
+    </div>
+    <label for="elbow">Elbow <output id="elbow-value">−90°</output></label>
+    <input id="elbow" type="range" min="-135" max="135" value="-90">
+    <button id="grip" type="button">Gripper: open</button>
+  </section>
+  <button id="stop" type="button">STOP ROVER</button>
+  <script>
+    const status = document.querySelector('#status');
+    const elbow = document.querySelector('#elbow');
+    const elbowValue = document.querySelector('#elbow-value');
+    const drive = document.querySelector('#drive');
+    const arm = document.querySelector('#arm');
+    const grip = document.querySelector('#grip');
+    const motionStatus = document.querySelector('#motion-status');
+    let socket; let mode = 'drive'; let gripOpen = true; let enabled = false;
+    let orientation = { beta: 0, gamma: 0 };
+    let needsCalibration = true; let lastMotionAt = 0;
+    let lastOrientationAt = 0; let motionSource = '';
+
+    function setStatus(text, connected) { status.textContent = text; status.className = `status ${connected ? 'good' : 'bad'}`; }
+    function send(extra = {}, force = false) {
+      if (!force && !enabled) return;
+      if (!socket || socket.readyState !== WebSocket.OPEN) return;
+      socket.send(JSON.stringify({ ...orientation, mode, elbow: Number(elbow.value), grip: gripOpen, ...extra }));
+    }
+    function selectMode(next) { mode = next; drive.classList.toggle('active', mode === 'drive'); arm.classList.toggle('active', mode === 'arm'); send({ calibrate: true }); }
+    function acceptTilt(beta, gamma, source) {
+      if (!enabled || !Number.isFinite(beta) || !Number.isFinite(gamma)) return;
+      if (motionSource !== source) needsCalibration = true;
+      motionSource = source;
+      orientation = { beta, gamma };
+      lastMotionAt = Date.now();
+      motionStatus.textContent = `${source}: forward/back ${beta.toFixed(1)}°, left/right ${gamma.toFixed(1)}°`;
+      motionStatus.className = 'status good';
+      send({ calibrate: needsCalibration });
+      needsCalibration = false;
+    }
+    function onOrientation(event) {
+      if (!enabled || !Number.isFinite(event.beta) || !Number.isFinite(event.gamma)) return;
+      lastOrientationAt = Date.now();
+      acceptTilt(event.beta, event.gamma, 'Orientation tilt');
+    }
+    function onMotion(event) {
+      if (!enabled || (lastOrientationAt && Date.now() - lastOrientationAt < 1000)) return;
+      const gravity = event.accelerationIncludingGravity;
+      if (!gravity || ![gravity.x, gravity.y, gravity.z].every(Number.isFinite)) return;
+      if (Math.hypot(gravity.x, gravity.y, gravity.z) < 1) return;
+      // Gravity gives pitch and roll even on phones without a gyroscope.
+      // Hold in portrait, screen up; moving/shaking also affects these readings.
+      const beta = Math.atan2(gravity.y, gravity.z) * 180 / Math.PI;
+      const gamma = Math.atan2(-gravity.x, Math.hypot(gravity.y, gravity.z)) * 180 / Math.PI;
+      acceptTilt(beta, gamma, 'Accelerometer tilt');
+    }
+    window.addEventListener('deviceorientation', onOrientation);
+    window.addEventListener('devicemotion', onMotion);
+    function stop() {
+      enabled = false;
+      send({ stop: true }, true);
+      setStatus('Stopped. Enable controls to drive again.', false);
+    }
+    setInterval(() => {
+      if (!enabled) return;
+      if (!window.isSecureContext) {
+        motionStatus.textContent = 'Tilt blocked: open the HTTPS address after installing the local certificate.';
+        motionStatus.className = 'status bad';
+      } else if (Date.now() - lastMotionAt > 1500) {
+        motionStatus.textContent = 'No tilt samples. Check browser motion permissions and that this phone has motion sensors.';
+        motionStatus.className = 'status bad';
+      }
+    }, 500);
+    async function enable() {
+      try {
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+          if (await DeviceOrientationEvent.requestPermission() !== 'granted') throw new Error('Motion permission was not granted');
+        }
+        if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+          if (await DeviceMotionEvent.requestPermission() !== 'granted') throw new Error('Accelerometer permission was not granted');
+        }
+        const socketScheme = location.protocol === 'https:' ? 'wss' : 'ws';
+        if (socket) { send({ stop: true }, true); socket.close(); }
+        const connection = new WebSocket(`${socketScheme}://${location.host}/phone`);
+        socket = connection;
+        socket.onopen = () => { enabled = true; needsCalibration = true; lastMotionAt = 0; lastOrientationAt = 0; motionSource = ''; setStatus('Connected — hold the phone still to centre tilt.', true); };
+        socket.onclose = () => { if (socket !== connection) return; enabled = false; setStatus('Connection closed — rover stopped.', false); };
+        socket.onerror = () => setStatus('Connection error. Check that the laptop and phone use the same Wi-Fi.', false);
+      } catch (error) { setStatus(error.message, false); }
+    }
+    document.querySelector('#enable').addEventListener('click', enable);
+    drive.addEventListener('click', () => selectMode('drive'));
+    arm.addEventListener('click', () => selectMode('arm'));
+    elbow.addEventListener('input', () => { elbowValue.value = `${elbow.value}°`; send(); });
+    grip.addEventListener('click', () => { gripOpen = !gripOpen; grip.textContent = `Gripper: ${gripOpen ? 'open' : 'closed'}`; send(); });
+    document.querySelector('#stop').addEventListener('click', stop);
+    document.querySelector('#calibrate').addEventListener('click', () => { needsCalibration = true; });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); });
+  </script>
+</body>
+</html>
