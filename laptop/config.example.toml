@@ -6,7 +6,7 @@ ws_port = 81
 stream_path = "/stream"
 
 [blocks]
-size_mm = 35               # 3 to 4 cm cubes
+size_mm = 40               # the blocks are 40 mm cubes
 heavy_marker_ids = [9]     # markers that mean "heavy / load-bearing"
 
 [survivor_light]

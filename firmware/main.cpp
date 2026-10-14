@@ -1,4 +1,8 @@
+#include <Adafruit_PWMServoDriver.h>
 #include <Arduino.h>
+#include <DHT.h>
+#include <WebSocketsServer.h>
+#include <WiFi.h>
 
 #include "pins.h"
 

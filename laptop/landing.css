@@ -382,6 +382,20 @@ h1 .signal {
 .diagram .dim { stroke: var(--color-ash-gray); }
 
 .diagram .ln { fill: none; stroke: var(--color-ash-gray); stroke-width: 1.5; }
+.diagram .gnd {
+  fill: none;
+  stroke: var(--color-saffron-spark);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.bp-text a {
+  color: var(--color-saffron-spark);
+  text-underline-offset: 3px;
+}
+
+.bp-after { margin-top: 24px; }
 .diagram .loop { stroke-dasharray: 5 5; }
 .diagram .loop-a { stroke: var(--color-saffron-spark); stroke-dasharray: 5 5; }
 

@@ -93,7 +93,19 @@ still-here/
     pyproject.toml           Python dependencies (OpenCV, FastAPI, pytest)
     config.example.toml      Rover IP, block size, pulse rate, pass thresholds
     perception.py *          Pulsing light, ArUco blocks, layer order, heat
-    planner.py *             Top-first pick order, skip heavy blocks, avoid heat
+    planner.py               Top-first pick order, skip heavy blocks, avoid heat
+    test_planner.py          Tests for the planner
+    route.py                 Which blocks to remove to reach the survivor: cheapest route, heavy blocks and heat avoided
+    test_route.py            Tests for the route search
+    scale.py                 Pixels to millimetres, learned from the 40 mm blocks
+    scene.py                 Turns picture positions into millimetres and picks plan or route
+    stream.py                Reopens the camera stream when it drops out
+    test_scale.py            Tests for the scale
+    test_scene.py            Tests for the scene
+    test_stream.py           Tests for the stream
+    test_vision_pipeline.py  Whole camera pipeline on made-up pictures
+    vision.py                Colour-blob vision demo (ported from the C++ prototype) feeding the planner
+    test_vision.py           Tests for the vision demo on synthetic pictures
     server.py *              FastAPI and WebSocket link to the rover, serves the UI
     calibrate.py *           Camera pixels to arm position, one command to re-run
     trial_log.py *           Appends runs to trials.csv, applies the 5 mm / 10 degree rule

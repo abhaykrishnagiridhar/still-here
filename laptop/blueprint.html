@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@200;400;600&family=Instrument+Serif:ital@1&display=swap">
-  <link rel="stylesheet" href="landing.css?v=3">
+  <link rel="stylesheet" href="landing.css?v=4">
   <script src="landing.js?v=3" defer></script>
 </head>
 <body>
@@ -114,6 +114,83 @@
           <text class="s" x="492" y="372">manual drive</text>
         </svg>
       </div>
+    </section>
+
+    <section class="bp" aria-labelledby="power-h">
+      <p class="label">Power</p>
+      <h2 id="power-h">Two supplies, one ground</h2>
+      <p class="bp-text">The power bank runs only the ESP32-S3. A protected 2S 18650 pack runs the servos and the drive motors. Motor starts and servo stalls pull sharp current spikes, and on a shared supply those make the voltage dip and reset the ESP32. Now the spikes stay on their own side, and the two grounds join at one point.</p>
+      <div class="diagram" tabindex="0" role="region" aria-label="Power supply diagram, scrolls sideways on small screens">
+        <svg viewBox="0 0 680 490" role="img" aria-labelledby="pwr-t pwr-d">
+          <title id="pwr-t">Two-supply power diagram</title>
+          <desc id="pwr-d">A power bank feeds only the ESP32-S3. A 2S 18650 pack goes through protection to a 6.0V buck for the servos and straight to the motor driver for the drive motors. The ESP32 sends I2C to the PCA9685 and PWM to the motor driver. The grounds of the two supplies are joined at one point.</desc>
+
+          <text class="s" x="18" y="36">Supply 1: power bank, logic only</text>
+          <text class="s" x="18" y="176">Fed by both supplies</text>
+          <text class="s" x="18" y="316">Supply 2: 18650 pack, power</text>
+
+          <rect class="bx v" x="18" y="50" width="116" height="64" rx="10"/>
+          <text class="t" x="76" y="76" text-anchor="middle">Power bank</text>
+          <text class="s" x="76" y="96" text-anchor="middle">5V USB only</text>
+
+          <rect class="bx v" x="282" y="50" width="116" height="64" rx="10"/>
+          <text class="t" x="340" y="76" text-anchor="middle">ESP32-S3</text>
+          <text class="s" x="340" y="96" text-anchor="middle">camera, sensors</text>
+
+          <rect class="bx dim" x="150" y="190" width="116" height="64" rx="10"/>
+          <text class="t" x="208" y="216" text-anchor="middle">Servos</text>
+          <text class="s" x="208" y="236" text-anchor="middle">MG995, MG90S</text>
+
+          <rect class="bx a" x="282" y="190" width="116" height="64" rx="10"/>
+          <text class="t" x="340" y="216" text-anchor="middle">PCA9685</text>
+          <text class="s" x="340" y="236" text-anchor="middle">V+ cap 1000uF</text>
+
+          <rect class="bx a" x="414" y="190" width="116" height="64" rx="10"/>
+          <text class="t" x="472" y="216" text-anchor="middle">Motor driver</text>
+          <text class="s" x="472" y="236" text-anchor="middle">cap 470uF</text>
+
+          <rect class="bx dim" x="546" y="190" width="116" height="64" rx="10"/>
+          <text class="t" x="604" y="216" text-anchor="middle">Drive motors</text>
+          <text class="s" x="604" y="236" text-anchor="middle">100nF each</text>
+
+          <rect class="bx g" x="18" y="330" width="116" height="64" rx="10"/>
+          <text class="t" x="76" y="356" text-anchor="middle">2x 18650</text>
+          <text class="s" x="76" y="376" text-anchor="middle">2S, 7.4V</text>
+
+          <rect class="bx g" x="150" y="330" width="116" height="64" rx="10"/>
+          <text class="t" x="208" y="356" text-anchor="middle">Protection</text>
+          <text class="s" x="208" y="376" text-anchor="middle">BMS, 10A fuse</text>
+
+          <rect class="bx g" x="282" y="330" width="116" height="64" rx="10"/>
+          <text class="t" x="340" y="356" text-anchor="middle">Buck 6.0V</text>
+          <text class="s" x="340" y="376" text-anchor="middle">5A or more</text>
+
+          <line class="ln" x1="136" y1="82" x2="280" y2="82" marker-end="url(#arr)"/>
+          <text class="s" x="208" y="74" text-anchor="middle">5V USB</text>
+
+          <line class="ln" x1="310" y1="116" x2="310" y2="188" marker-end="url(#arr)"/>
+          <text class="s" x="318" y="156">I2C</text>
+
+          <path class="ln" d="M370 116 V150 H472 V188" marker-end="url(#arr)"/>
+          <text class="s" x="421" y="168" text-anchor="middle">PWM + direction</text>
+
+          <line class="ln" x1="280" y1="222" x2="268" y2="222" marker-end="url(#arr)"/>
+          <line class="ln" x1="532" y1="222" x2="544" y2="222" marker-end="url(#arr)"/>
+
+          <line class="ln" x1="136" y1="362" x2="148" y2="362" marker-end="url(#arr)"/>
+          <line class="ln" x1="268" y1="362" x2="280" y2="362" marker-end="url(#arr)"/>
+
+          <line class="ln" x1="340" y1="328" x2="340" y2="256" marker-end="url(#arr)"/>
+          <text class="s" x="348" y="296">6.0V servo rail</text>
+
+          <path class="ln" d="M208 396 V430 H472 V256" marker-end="url(#arr)"/>
+          <text class="s" x="340" y="422" text-anchor="middle">7.4V to the driver</text>
+
+          <path class="gnd" d="M18 82 H10 V362 H18"/>
+          <text class="s" x="340" y="466" text-anchor="middle">Bank ground and pack ground join at one point, and every board's ground goes to it.</text>
+        </svg>
+      </div>
+      <p class="bp-text bp-after">Violet is the power bank side, teal is the pack side, and amber parts take signals from one and power from the other. Parts, capacitor values and the test plan are in <a href="https://github.com/abhaykrishnagiridhar/still-here/blob/main/docs/power.md">power.md</a> in the repository.</p>
     </section>
 
     <section class="bp" aria-labelledby="flow-h">
@@ -262,6 +339,8 @@
   docs/
     blueprint.md             Diagrams, build order, layout (GitHub version)
     protocol.md              Draft message contract between laptop and rover
+    power.md                 Two-supply power design, parts, wiring and test plan
+    power-supply-improvements.md  What changed in the power supply and why
     tasks.md                 Per-person checklists for A, B, C, D
     trials.csv               Log of the 10 two-block test runs
   laptop/
@@ -275,7 +354,19 @@
     test_models.py           Tests for the data types
     config.example.toml      Rover IP, block size, pulse rate, pass thresholds
     perception.py *          Pulsing light, ArUco blocks, layer order, heat
-    planner.py *             Top-first pick order, skip heavy blocks, avoid heat
+    planner.py               Top-first pick order, skip heavy blocks, avoid heat
+    test_planner.py          Tests for the planner
+    route.py                 Which blocks to remove to reach the survivor: cheapest route, heavy blocks and heat avoided
+    test_route.py            Tests for the route search
+    scale.py                 Pixels to millimetres, learned from the 40 mm blocks
+    scene.py                 Turns picture positions into millimetres and picks plan or route
+    stream.py                Reopens the camera stream when it drops out
+    test_scale.py            Tests for the scale
+    test_scene.py            Tests for the scene
+    test_stream.py           Tests for the stream
+    test_vision_pipeline.py  Whole camera pipeline on made-up pictures
+    vision.py                Colour-blob vision demo (ported from the C++ prototype) feeding the planner
+    test_vision.py           Tests for the vision demo on synthetic pictures
     server.py *              FastAPI and WebSocket link to the rover
     calibrate.py *           Camera pixels to arm position
     trial_log.py *           Appends runs to trials.csv, applies the 5 mm / 10 degree rule

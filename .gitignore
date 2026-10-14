@@ -10,3 +10,9 @@ firmware/secrets.h
 frames/
 *.log
 design/
+build*/
+*.exe
+*.obj
+*.ilk
+*.pdb
+.coverage

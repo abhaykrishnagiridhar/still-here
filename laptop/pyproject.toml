@@ -12,10 +12,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "pytest-cov"]
+firmware = ["platformio", "esptool", "pyserial"]
 
 [tool.setuptools]
-py-modules = ["models"]
+py-modules = ["models", "planner", "route", "scale", "scene", "stream", "vision"]
 
 [tool.pytest.ini_options]
 testpaths = ["."]
