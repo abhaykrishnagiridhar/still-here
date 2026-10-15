@@ -408,6 +408,7 @@ def test_the_facts_of_a_verified_run():
         "steps_planned": planned,
         "obstacles_detected": 0,
         "safe_stop_triggered": False,
+        "disturbed_neighbour": False,
     }
 
 

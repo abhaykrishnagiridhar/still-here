@@ -38,8 +38,9 @@ constexpr int CAM_PIN_HREF = 7;
 constexpr int CAM_PIN_PCLK = 13;
 
 // ---- I2C bus for the PCA9685 servo driver (a second bus, apart from the camera's) --------
-// On the SD slot pins, which already have pull-ups on the board. The camera already uses I2C
-// port 0 (Wire), so the PCA9685 code must use Wire1: Wire1.begin(PIN_I2C_SDA, PIN_I2C_SCL).
+// On the SD slot pins, which already have pull-ups on the board. The camera driver takes I2C
+// port 1 (Wire1) for its own control bus, so the PCA9685 code must use port 0: Wire.begin(PIN_I2C_SDA,
+// PIN_I2C_SCL). Using Wire1 fails with "i2c driver install error" and the servo driver is never found.
 constexpr int PIN_I2C_SDA = 39;
 constexpr int PIN_I2C_SCL = 40;
 

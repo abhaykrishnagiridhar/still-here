@@ -39,6 +39,7 @@ from aruco import Config
 from calibrate import DEFAULT_FILE as CALIBRATION_FILE
 from calibrate import Calibration
 from calibrate import load as load_calibration
+from experience import Experience
 from manual_core import Manual
 from operator_core import Link, Operator
 from origin_guard import origin_allowed
@@ -58,6 +59,7 @@ FRAME_SIZE = (640, 480)
 STEP_S = 0.05  # how often the simulated rover is advanced
 PING_S = 0.5
 JPEG_QUALITY = 80
+EXPERIENCE_FILE = LAPTOP_DIR / "experience.json"  # git-ignored; what past runs taught the planner
 REPORT_FILE = LAPTOP_DIR / "safe_path_report.json"  # git-ignored; rewritten when a run ends
 TOKEN_COOKIE = "still_here_token"
 TOKEN_HEADER = "x-still-here-token"
@@ -177,6 +179,7 @@ def create_app(
     manual_clock: Callable[[], float] = time.monotonic,
     link: Optional[Link] = None,
     access_token: Optional[str] = None,
+    experience: Optional[Experience] = None,
 ) -> FastAPI:
     """Build the server. With a source it also reads that camera once it is started; with
     none (as in tests) nothing runs in the background."""
@@ -191,7 +194,10 @@ def create_app(
     link = link if link is not None else SimLink(blocks_seen)
     operator = Operator(link)
     holder["operator"] = operator
-    capture = Capture(Pipeline(config, calibration), operator, lock)
+    experience = experience if experience is not None else Experience()  # in memory unless given a file
+    pipeline = Pipeline(config, calibration)
+    pipeline.extra_clearance_mm = experience.extra_clearance_mm
+    capture = Capture(pipeline, operator, lock)
     manual = Manual(link, is_busy=operator.busy, clock=manual_clock)
 
     def advance(dt: float) -> None:
@@ -200,7 +206,10 @@ def create_app(
             operator.tick()
             manual.tick()  # stops the wheels if the control page stopped sending
             finished = operator.take_finished_facts()
-        if finished is not None:  # a run just ended: save the report file and chime once
+        if finished is not None:  # a run just ended: learn from it, save the report file and chime once
+            with lock:
+                experience.record(finished, disturbed=bool(finished.get("disturbed_neighbour")))
+                pipeline.extra_clearance_mm = experience.extra_clearance_mm
             report_writer(finished, str(report_path), choose_summary(build_report(finished)))
 
     def require_rover() -> None:
@@ -288,6 +297,8 @@ def create_app(
     app.state.source = source
     app.state.operator = operator
     app.state.capture = capture
+    app.state.pipeline = pipeline
+    app.state.experience = experience
     app.state.link = link
     app.state.advance = advance
     app.state.manual = manual
@@ -307,6 +318,7 @@ def create_app(
             body = operator.state()
             body["frame"] = {"w": capture.frame_size[0], "h": capture.frame_size[1]}
             body["camera_error"] = capture.error
+            body["learned"] = experience.explanation
             body["rover_connected"] = bool(getattr(link, "connected", True))
             body["rover_address"] = str(getattr(link, "address", ""))
             body["rover_error"] = str(getattr(link, "last_error", ""))
@@ -466,7 +478,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     import uvicorn
 
     uvicorn.run(
-        create_app(source, config, calibration=calibration, link=link, access_token=token), host=args.host, port=args.port
+        create_app(
+            source, config, calibration=calibration, link=link, access_token=token,
+            experience=Experience(EXPERIENCE_FILE),
+        ), host=args.host, port=args.port
     )
     return 0
 

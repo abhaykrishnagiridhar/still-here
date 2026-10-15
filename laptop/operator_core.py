@@ -24,6 +24,7 @@ from typing import Callable, Optional, Protocol
 from plan_message import build_abort_message, build_plan_message, build_plan_start_message
 from report import build_report, choose_summary, render_report
 from route import RoutePlan
+from grip_watch import GripWatch
 from scene_watch import SceneWatch
 
 # Where picked blocks are put down, in the arm frame (mm). An assumption until the rover is built.
@@ -101,8 +102,10 @@ class Operator:
         self._obstacle_active = False
         self._facts_handed_over = False
         self._watch: Optional[SceneWatch] = None  # compares each picture with the scene the plan was made for
+        self._grip: Optional[GripWatch] = None  # checks that a picked block really left its place
         self._current_step = 0  # the step the rover says it is on
         self._notice: Optional[str] = None  # why the last run was stopped, shown with the fresh plan
+        self._disturbed = False  # a block we were not touching moved or vanished during the run
 
     def reset(self) -> None:
         """Start a fresh run. The tapped survivor is forgotten with it."""
@@ -140,7 +143,10 @@ class Operator:
         scene = getattr(seen, "scene", None)
         if self._watch is None or scene is None:
             return  # nothing to compare with
-        reason = self._watch.check(scene.blocks, self._handled_ids(), self._clock())
+        now = self._clock()
+        reason = self._watch.check(scene.blocks, self._handled_ids(), now)
+        if reason is None and self._grip is not None:
+            reason = self._grip.check(scene.blocks, now)
         if reason is not None:
             self._replan(reason)
 
@@ -151,6 +157,7 @@ class Operator:
         self._link.send(build_abort_message())
         self._phase = "aborted"
         self._note = f"Stopped: {reason}."
+        self._disturbed = "moved" in reason or "no longer seen" in reason
         self._queued_facts.append(self.facts())
         latest = self._latest
         self._reset_run()
@@ -216,6 +223,7 @@ class Operator:
         self._results = {}
         scene = getattr(self._latest, "scene", None)
         self._watch = SceneWatch(scene.blocks, drop_mm=self._drop) if scene is not None else None
+        self._grip = GripWatch(scene.blocks) if scene is not None else None
         self._current_step = 0
         self._notice = None  # the person has seen why the last run stopped and approved the new plan
         self._approved_at = self._clock()
@@ -251,10 +259,23 @@ class Operator:
                 self._on_state(message)
             elif kind == "step_done" and message.get("plan_id") == self._plan_id:
                 self._results[message["step_id"]] = (bool(message["ok"]), message.get("reason", ""))
+                self._watch_the_grip(message)
             elif kind == "event":
                 self._on_event(message.get("code"))
             elif kind == "sensors":
                 self._count_obstacle_trips(message)
+
+    def _watch_the_grip(self, message: dict) -> None:
+        """A finished pick starts the camera check that the block really left its place; a finished
+        drop ends it. Steps go pick, drop for each block in order, so step 2n-1 is block n's pick."""
+        step_id = message.get("step_id")
+        if self._grip is None or self._frozen is None or not message.get("ok") or not isinstance(step_id, int):
+            return
+        for item in self._frozen["order"]:
+            if step_id == 2 * item["n"] - 1:
+                self._grip.picked(item["id"], self._clock())
+            elif step_id == 2 * item["n"]:
+                self._grip.released(item["id"])
 
     def _count_obstacle_trips(self, message: dict) -> None:
         """Each time an IR obstacle sensor goes from quiet to tripped counts once."""
@@ -330,6 +351,7 @@ class Operator:
             "steps_planned": len(self._steps),
             "obstacles_detected": self._obstacles,
             "safe_stop_triggered": self._phase == "aborted",
+            "disturbed_neighbour": self._disturbed,
         }
 
     def take_finished_facts(self) -> Optional[dict]:

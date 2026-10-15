@@ -302,3 +302,18 @@ def test_a_wider_buggy_has_to_clear_more_blocks_than_a_narrow_one():
     narrow = blocks_removed_for(Config(buggy_breadth_mm=40.0, clearance_mm=10.0))
 
     assert len(real_buggy) > len(narrow)
+
+
+def test_extra_room_learned_from_past_runs_widens_the_corridor():
+    from aruco import Config
+
+    narrow = Config(buggy_breadth_mm=40.0, clearance_mm=10.0)  # a scene where the width decides the count
+    base = Pipeline(narrow)
+    wider = Pipeline(narrow)
+    wider.extra_clearance_mm = 100.0
+    last = {}
+    for name, pipeline in (("base", base), ("wider", wider)):
+        for i in range(int(2.0 * FPS)):
+            last[name] = pipeline.process(frame_with(), i / FPS, survivor_hint=(320, 100))
+
+    assert len(last["wider"].result.order) > len(last["base"].result.order)

@@ -414,6 +414,7 @@ class Pipeline:
         self._using_markers = False
         self._last_signature: Optional[tuple] = None
         self._started_at: Optional[float] = None
+        self.extra_clearance_mm = 0.0  # room learned from past runs, added to each side of the buggy
 
     @property
     def px_per_mm(self) -> Optional[float]:
@@ -484,7 +485,7 @@ class Pipeline:
             scene = build_scene(
                 block_tracks, heat_tracks, survivor, origin, px_per_mm, projection=self._calibration
             )
-        result = decide(scene, corridor_mm=self._config.corridor_mm)
+        result = decide(scene, corridor_mm=self._config.corridor_mm + 2 * self.extra_clearance_mm)
 
         # Report the plan only once the survivor search has had time to rule out its own light.
         report = None

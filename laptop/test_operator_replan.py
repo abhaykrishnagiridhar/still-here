@@ -282,3 +282,51 @@ def test_a_new_block_appearing_in_the_scene_stops_the_rover():
 
     assert operator.state()["phase"] == "plan_ready"
     assert "new block" in operator.state()["notice"]
+
+
+# --- an empty grab: the rover says it picked a block that the camera still sees where it was ----
+
+
+def pick_done(plan_id, step_id):
+    return {"type": "step_done", "plan_id": plan_id, "step_id": step_id, "ok": True, "reason": ""}
+
+
+def test_a_block_still_in_place_after_the_pick_stops_the_rover_and_offers_a_new_plan():
+    operator, link, clock, plan_id = running()
+    first = operator.state()["plan"]["order"][0]["id"]
+    operator.on_rover([pick_done(plan_id, 1)])
+
+    watch_for(operator, clock, WALL, 2.5)
+
+    assert {"type": "abort"} in link.sent
+    state = operator.state()
+    assert state["phase"] == "plan_ready"
+    assert f"block_{first}" in state["notice"] and "still" in state["notice"]
+
+
+def test_a_block_that_left_with_the_claw_carries_on_and_the_drop_ends_the_watch():
+    operator, link, clock, plan_id = running()
+    first = operator.state()["plan"]["order"][0]["id"]
+    operator.on_rover([pick_done(plan_id, 1)])
+    without_it = [b for b in WALL if b.id != first]
+
+    watch_for(operator, clock, without_it, 2.5)
+    operator.on_rover([pick_done(plan_id, 2)])
+    watch_for(operator, clock, WALL, 2.5)  # back in view at its old place: no longer judged
+
+    assert {"type": "abort"} not in link.sent
+    assert operator.state()["phase"] == "running"
+
+
+def test_a_run_stopped_because_a_block_moved_is_marked_as_knocked():
+    operator, link, clock, _ = running()
+    watch_for(operator, clock, with_block(WALL, untouched_block(operator), dx=40.0), 2.0)
+
+    assert operator.take_finished_facts()["disturbed_neighbour"] is True
+
+
+def test_a_run_that_went_to_plan_is_not_marked_as_knocked():
+    operator, link, clock, _ = running()
+    operator.abort()
+
+    assert operator.take_finished_facts()["disturbed_neighbour"] is False

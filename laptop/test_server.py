@@ -649,3 +649,50 @@ def test_the_laptops_address_on_the_network_is_found_or_falls_back_to_this_machi
 
     assert server.lan_address(lambda: Probe("192.168.0.20")) == "192.168.0.20"
     assert server.lan_address(lambda: Probe(None)) == "127.0.0.1"
+
+
+# --- learning from past runs ----------------------------------------------------------
+
+
+def test_a_clean_finished_run_is_remembered_and_adds_no_room(written):
+    from experience import Experience
+
+    experience = Experience()
+    app = server.create_app(source=None, report_writer=written, experience=experience)
+    client = TestClient(app)
+    feed(app)
+    client.post("/api/approve", json={"key": plan_key(client)}, headers=LOCAL)
+    run_the_plan(app, client, "verifying")
+    for _ in range(3):
+        feed(app, seen([]))
+    app.state.advance(0.05)
+    app.state.advance(0.05)
+
+    assert [run.trouble for run in experience.runs] == [False]
+    assert client.get("/api/state").json()["learned"] is None
+
+
+def test_trouble_in_past_runs_widens_the_corridor_and_the_page_says_so(written):
+    from experience import Experience
+
+    experience = Experience(step_mm=10)
+    experience.record({"run_id": "old", "status": "completed", "verified": True, "obstacles_detected": 1})
+    app = server.create_app(source=None, report_writer=written, experience=experience)
+    client = TestClient(app)
+
+    assert app.state.pipeline.extra_clearance_mm == 10.0
+    assert "10 mm" in client.get("/api/state").json()["learned"]
+
+
+def test_a_run_the_operator_stopped_teaches_nothing(written):
+    from experience import Experience
+
+    experience = Experience()
+    app = server.create_app(source=None, report_writer=written, experience=experience)
+    client = TestClient(app)
+    feed(app)
+    client.post("/api/approve", json={"key": plan_key(client)}, headers=LOCAL)
+    client.post("/api/abort", headers=LOCAL)
+    app.state.advance(0.05)
+
+    assert experience.runs == ()

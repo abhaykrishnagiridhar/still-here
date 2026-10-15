@@ -17,6 +17,12 @@
 }
 .status[data-tone="warn"] { color: var(--color-saffron-spark); }
 .status[data-tone="ok"] { color: #55c9ad; }
+.learned {
+  font-size: 15px;
+  margin: -16px 0 24px;
+  max-width: 46rem;
+  color: var(--color-silver-mist);
+}
 
 .workspace {
   display: grid;

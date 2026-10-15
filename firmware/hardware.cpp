@@ -47,16 +47,19 @@ const JointServo SERVOS[JOINT_COUNT] = {
 DHT* g_dht = nullptr;
 
 void pcaWrite(uint8_t reg, uint8_t value) {
-    Wire1.beginTransmission(PCA_ADDRESS);
-    Wire1.write(reg);
-    Wire1.write(value);
-    Wire1.endTransmission();
+    Wire.beginTransmission(PCA_ADDRESS);
+    Wire.write(reg);
+    Wire.write(value);
+    Wire.endTransmission();
 }
 
 bool pcaBegin() {
-    Wire1.begin(PIN_I2C_SDA, PIN_I2C_SCL, 400000);
-    Wire1.beginTransmission(PCA_ADDRESS);
-    if (Wire1.endTransmission() != 0) return false;
+    Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL, 400000);
+    Wire.beginTransmission(PCA_ADDRESS);
+    if (Wire.endTransmission() != 0) {
+        Wire.end();  // free the bus, so the next try starts clean
+        return false;
+    }
     pcaWrite(0x00, 0x10);  // sleep, so the frequency can be set
     pcaWrite(0xFE, 121);   // 50 Hz: 25 MHz / (4096 * 50) - 1
     pcaWrite(0x00, 0x20);  // wake, auto-increment on
@@ -66,13 +69,13 @@ bool pcaBegin() {
 }
 
 void pcaSetTicks(int channel, int onTicks, int offTicks) {
-    Wire1.beginTransmission(PCA_ADDRESS);
-    Wire1.write(0x06 + 4 * channel);
-    Wire1.write(onTicks & 0xFF);
-    Wire1.write(onTicks >> 8);
-    Wire1.write(offTicks & 0xFF);
-    Wire1.write(offTicks >> 8);
-    Wire1.endTransmission();
+    Wire.beginTransmission(PCA_ADDRESS);
+    Wire.write(0x06 + 4 * channel);
+    Wire.write(onTicks & 0xFF);
+    Wire.write(onTicks >> 8);
+    Wire.write(offTicks & 0xFF);
+    Wire.write(offTicks >> 8);
+    Wire.endTransmission();
 }
 
 void setMotor(int enPin, int in1, int in2, int pwmChannel, float speed) {

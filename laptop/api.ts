@@ -32,6 +32,7 @@ export interface State {
   link_up: boolean;
   verified: boolean | null;
   notice: string | null;
+  learned: string | null;
   frame: { w: number; h: number };
   camera_error: string | null;
   rover_connected: boolean;

@@ -15,6 +15,7 @@ const video = $<HTMLImageElement>("video");
 const mark = $<HTMLElement>("tap-mark");
 const headline = $<HTMLElement>("headline");
 const statusLine = $<HTMLElement>("status");
+const learned = $<HTMLElement>("learned");
 const approve = $<HTMLButtonElement>("approve");
 const stop = $<HTMLButtonElement>("stop");
 const again = $<HTMLButtonElement>("again");
@@ -74,6 +75,8 @@ function render(state: State): void {
   const tone = notice !== null || state.notice !== null ? "warn" : toneFor(state.phase, state.link_up, state.verified, state.camera_error);
   setStatus(notice ?? withNotice(state.notice, state.camera_error ?? state.message), tone);
   headline.textContent = headlineFor(state.phase, state.verified);
+  learned.textContent = state.learned ?? "";
+  learned.hidden = state.learned === null;
 
   const plan = state.plan;
   fill(steps, plan ? plan.order : [], "No blocks need to move yet.", (p) =>

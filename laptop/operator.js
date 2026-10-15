@@ -16,6 +16,7 @@ const video = $                  ("video");
 const mark = $             ("tap-mark");
 const headline = $             ("headline");
 const statusLine = $             ("status");
+const learned = $             ("learned");
 const approve = $                   ("approve");
 const stop = $                   ("stop");
 const again = $                   ("again");
@@ -75,6 +76,8 @@ function render(state       )       {
   const tone = notice !== null || state.notice !== null ? "warn" : toneFor(state.phase, state.link_up, state.verified, state.camera_error);
   setStatus(notice ?? withNotice(state.notice, state.camera_error ?? state.message), tone);
   headline.textContent = headlineFor(state.phase, state.verified);
+  learned.textContent = state.learned ?? "";
+  learned.hidden = state.learned === null;
 
   const plan = state.plan;
   fill(steps, plan ? plan.order : [], "No blocks need to move yet.", (p) =>
