@@ -95,6 +95,7 @@ Sizing from that:
 - **The "500 series" DC motor.** If it is an RS-500 or 550 type, it can pull 5 to 15A when stalled. An L298N (2A per channel) cannot drive it, and it would overload this pack. If it is needed, it requires a heavier driver (for example a BTS7960), its own fuse, and a bigger pack. If it is not essential, drive the wheels with the TT motors. Decide before building.
 - **Servo count and mix.** Confirm which servos go where, then re-check the servo rail rating.
 - **Pack protection.** Confirm the BMS current rating covers the stall budget above.
+- **High-power servos (future).** A rescue version would need servos far stronger than the MG995 and MG90S. For example, retailer listings describe the REEFS RC 1400 Smart as a 4S-rated (up to 16.8 V) brushless servo. That does not fit this design: the servo rail here is 6 V from a 2S pack. It would need a 4S pack, a supply and wiring rated for its stall current (read the datasheet, it is not in this document), and a new test plan. Redo this page on paper before buying one. See `roadmap.md`.
 
 ## Firmware that helps
 

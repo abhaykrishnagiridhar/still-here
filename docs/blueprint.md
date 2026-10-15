@@ -123,6 +123,8 @@ still-here/
     blueprint.md             This page: diagrams, build order, layout
     protocol.md              Draft message contract between laptop and rover
     tasks.md                 Per-person checklists for A, B, C, D
+    roadmap.md              Where the project could go: fire and rescue, stronger servos, partners
+    phone-simulation.md     How the phone and Blender simulation works, for people and LLMs
     trials.csv               Log of the 10 two-block test runs
   laptop/
     models.py                Frozen data types: Block, HeatZone, PlanStep, Plan
@@ -185,3 +187,7 @@ still-here/
 ## 7. What can be cut
 
 First to go: heat avoidance, then drive modes, then link-drop finish. Never cut: the two-block test, the plan shown on screen, and the final report.
+
+## 8. Beyond the hackathon
+
+We want to take the same idea (see the scene, decide what is safe to move, show the plan, move only what a person approves) into fire and rescue work, and to talk to servo makers such as REEFS RC about high-power servos for a stronger arm. That needs a bigger power system and real trials with rescue crews. It is an aim, not an agreement, and none of it is tested yet. See `roadmap.md`.

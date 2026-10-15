@@ -56,6 +56,16 @@ flowchart TD
     I --> G
 ```
 
+## Where it could go: fire and rescue
+
+The blocks are a safe stand-in for a real problem: reaching a trapped person without bringing more of the structure down on them or on the people sent in. After the hackathon we want to grow the same idea (look at the scene, work out what is safe to move, show the plan to a person, move only what they approve) into tools that help fire and rescue crews do more of the risky first look and clearing from a distance, so fewer people have to go in.
+
+- **Stronger arms.** The rover lifts light blocks with hobby servos today. Real debris needs high-torque servos. We would like to talk to servo makers such as [REEFS RC](https://store.hobbyetc.com/parts/view/185207), whose 1400 Smart is a 4S-rated brushless servo, about how high-power servos could make a rescue arm both stronger and safer to use. That also means a bigger power system, see `docs/power.md`.
+- **Harsher scenes.** Heat, smoke and dust need better sensing than one flame sensor and a visible-light camera.
+- **People first.** We would talk to fire and rescue crews about what they need before building it. A person always approves the plan.
+
+This is an aim, not an agreement: no company has agreed to work with us, and nothing here has been tested on real debris or in a fire. It is a student prototype and must not be used in a real rescue. The full picture is in [docs/roadmap.md](docs/roadmap.md).
+
 ## Build order
 
 ```mermaid
@@ -95,6 +105,8 @@ still-here/
     power.md                 Two-supply power design, parts, wiring and test plan
     power-supply-improvements.md  What we changed in the power supply and why, with the diagram
     tasks.md                 Per-person checklists for A, B, C, D
+    roadmap.md              Where the project could go: fire and rescue, stronger servos, partners
+    phone-simulation.md     How the phone and Blender simulation works, for people and LLMs
     trials.csv               Log of the 10 two-block test runs
   laptop/
     models.py                Frozen data types: Block, HeatZone, PlanStep, Plan
