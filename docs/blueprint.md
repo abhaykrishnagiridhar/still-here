@@ -161,7 +161,9 @@ still-here/
     rover_sketch.txt         Earlier all-in-one rover sketch, reference only, not built
     cam_probe.txt            Camera sensor probe for the S3 board, paste into the Arduino IDE
     cam_scan.txt             Full camera pin scan, for when the probe finds no known map
-    link.cpp *               Camera stream and WebSocket server, link-loss handling
+    camera.h, camera.cpp     GC2145 camera: raw pictures turned into JPEG on the chip
+    mjpeg_server.h, .cpp     Video over Wi-Fi: /stream (MJPEG), /capture (one picture)
+    link.cpp *               WebSocket server, link-loss handling
     arm.cpp *                PCA9685 servo driver, pick and drop, stored plan
     drive.cpp *              L298N wheels, manual and auto modes, IR stop
     sensors.cpp *            IR obstacle, IR flame and DHT11 readout
