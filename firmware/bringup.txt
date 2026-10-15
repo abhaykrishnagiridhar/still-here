@@ -31,13 +31,16 @@ const int BATT_ADC = 1;
 
 // ---- limits -------------------------------------------------------------------------------
 const uint8_t PCA_ADDR = 0x40;
-const int ANGLE_MIN = 10, ANGLE_MAX = 170;  // never ask a servo to hit its end stops
+const int ANGLE_MIN = 10, ANGLE_MAX = 170;  // never ask a servo to hit its end stops. A standard servo turns
+                                            // only about 180 degrees: check the arm's joints can reach the
+                                            // ranges in docs/protocol.md (the elbow asks for 270) before relying on them.
 const int PULSE_MIN_US = 600, PULSE_MAX_US = 2400;
 const uint32_t SERVO_STEP_MS = 15;          // 1 degree every 15 ms: about 66 degrees per second
 const uint32_t MOTOR_RUN_MS = 1500;
 const float DIVIDER_TOP_K = 100.0, DIVIDER_BOTTOM_K = 33.0;  // docs/power.md
 
 int servoAngle[16];  // last angle sent to each channel, -1 = never moved
+bool pcaReady = false;  // the servo driver is set up once: setting it up again puts every servo to sleep for a moment
 uint32_t motorStopAt = 0;
 String line;
 
@@ -143,7 +146,10 @@ void doServo(int channel, int angle) {
   if (angle < ANGLE_MIN || angle > ANGLE_MAX) {
     return void(Serial.printf("  angle must be %d to %d\n", ANGLE_MIN, ANGLE_MAX));
   }
-  if (!pcaBegin()) return void(Serial.println("  servo driver not found. Run: scan"));
+  if (!pcaReady) {
+    if (!pcaBegin()) return void(Serial.println("  servo driver not found. Run: scan"));
+    pcaReady = true;
+  }
   if (servoAngle[channel] < 0) Serial.println("  first move of this servo: it will jump to the angle. Keep clear.");
   servoMove(channel, angle);
   Serial.printf("  channel %d at %d degrees\n", channel, angle);

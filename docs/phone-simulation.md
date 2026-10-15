@@ -110,7 +110,7 @@ laptop/.venv/Scripts/python -m uvicorn simulation.phone_bridge:app --host 0.0.0.
 
 `SimRover(blocks=(), heat_zones=(), survivor=None)` is the same class the operator server uses. Drive it with `handle(message)` (returns the messages the rover would send back) and `step(dt)` (advances time, returns periodic messages). The phone path uses only `drive` and `arm_pose`; it also understands `ping`, `mode`, `plan`, `plan_start` and `abort`, and ignores unknown types.
 
-**Geometry (all assumptions until the real arm is measured):** arm base height 60 mm, two links of 105 mm each, wheel base 140 mm, top speed 200 mm/s, block size 40 mm.
+**Geometry (all assumptions until the real arm is measured):** arm base height 60 mm, two links of 105 mm each, wheel base 140 mm (unmeasured; the buggy is officially 200 mm wide overall, so the real wheel base is under 200 mm), top speed 200 mm/s, block size 40 mm.
 
 **Wheels:** `drive` sets left and right speed (each clamped to -1..1). Each step: `forward = (left + right) / 2 * 200 mm/s`, `turn = (right - left) * 200 / 140 rad/s` (positive turns left), then heading and position are integrated. Drive commands are ignored while a stored plan is running.
 
@@ -143,7 +143,7 @@ At start it clears the scene, builds the objects below, binds UDP `127.0.0.1:876
 1. **The link-loss safety in the rover model is not active.** The bridge never sends `ping`, so the twin's `SimRover` reports `link_lost` about 2 s after Blender starts and stays in that state. Driving still works, but after that first trip the rover model's own "stop the wheels after 2 s of silence" rule never fires again. The bridge's own stale-phone stop (section 7) covers the phone going quiet, so this only matters if the bridge itself dies.
 2. **No feedback to the phone.** Blender never reports state, so the page cannot show where the rover is.
 3. **Block layers are ignored by the physics.** Blocks 1 and 2 share the same x, y and both sit 20 mm up, so the stack overlaps instead of stacking. `layer` is only data for the planner.
-4. **Blender dimensions are approximate.** The wheels sit 105 mm either side of the body centre but the motion model uses a 140 mm wheel base, and the arm and body sizes are rough.
+4. **Blender dimensions are approximate, and one is wrong for the official size.** The buggy is officially 200 mm wide overall (450 to 500 mm long), but the Blender wheels sit 105 mm either side of the body centre, a 210 mm track that is wider than the whole buggy, while the motion model uses a 140 mm wheel base. Neither number is measured. Measure the real wheel track and set both to it. The arm and body sizes are rough too.
 5. **Blender is not covered by automated tests**, because `bpy` cannot be imported in the test environment. The tilt mapping, the rover model and the bridge are.
 6. **The bridge is not authenticated.** Run it only on a network you trust.
 7. **Assumed numbers:** every geometry, speed and servo value in section 8 is an assumption until the real rover is measured.

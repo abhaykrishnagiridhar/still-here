@@ -25,7 +25,7 @@ BLOCK_SIZE = 40.0
 # --- joint limits and speeds (degrees) -------------------------------------------------
 BASE_LIMITS = (-90.0, 90.0)
 SHOULDER_LIMITS = (0.0, 120.0)
-ELBOW_LIMITS = (-135.0, 135.0)
+ELBOW_LIMITS = (-135.0, 135.0)  # 270 degrees: more than a standard 180 degree servo gives, so check it on the real arm
 GRIPPER_LIMITS = (0.0, 90.0)  # 0 closed, 90 open
 SERVO_RATE_DPS = 120.0  # at speed 1.0
 POSE_TOLERANCE_DEG = 1.0

@@ -10,7 +10,7 @@ What STILL HERE already does is the part that matters most there: it looks at th
 
 ## Where we are today
 
-- A small wheeled rover with a hobby-servo arm, tested on 40 mm blocks.
+- A small wheeled rover with a hobby-servo arm, designed for 40 mm blocks. It has not yet been tested on real blocks.
 - Camera and marker based perception, a planner that leaves heavy and load-bearing blocks alone, a route search to the survivor, an operator page with approval, and a fact-first report.
 - A basic heat check (a flame sensor, and a rule that blocks near a heat source are left in place).
 - A software model of the rover and a phone-driven Blender simulation (`docs/phone-simulation.md`).
@@ -39,7 +39,7 @@ The rule that stays the same: a person approves the plan, the rover only does wh
 
 ## Who we would like to talk to
 
-- **Servo and motor makers.** We would like to talk to companies such as REEFS RC about high-power servos. For example, retailer listings describe the REEFS RC 1400 Smart as a 4S-rated (up to 16.8 V) brushless servo with steel gears and a metal heat-sink case, listed at about 1400 oz-in of torque at 16.8 V and about 90 g. That is far beyond the MG995 class we use now. We would like to learn what suits a rescue arm, how it behaves under repeated heavy loads and heat, and whether a partnership or sponsorship is possible. We would check the real datasheet before designing around any figure.
+- **Servo and motor makers.** We would like to talk to companies such as REEFS RC about high-power servos. For example, retailer listings describe the REEFS RC 1400 Smart as a 4S-rated (up to 16.8 V) brushless servo with steel gears and a metal heat-sink case, listed at about 1400 oz-in of torque at 16.8 V and about 90 g. These figures come from retailer listings and have not been checked against the maker's datasheet. That is far beyond the MG995 class we use now. We would like to learn what suits a rescue arm, how it behaves under repeated heavy loads and heat, and whether a partnership or sponsorship is possible. We would check the real datasheet before designing around any figure.
 - **Fire and rescue organisations and training schools**, to tell us what is actually hard and let us test on realistic rubble.
 - **University labs and robotics clubs**, for materials, heat-tolerant sensing and testing space.
 

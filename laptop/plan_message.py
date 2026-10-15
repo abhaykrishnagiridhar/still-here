@@ -78,6 +78,8 @@ def build_abort_message() -> dict[str, str]:
 
 
 # Joint limits in degrees, the same as sim_rover.py. The firmware should refuse anything outside them.
+# ASSUMED until the arm is built: a standard hobby servo turns only about 180 degrees, so an elbow range
+# of -135 to 135 (270 degrees) needs checking against the real joint, and these limits changing if not.
 ARM_LIMITS_DEG = {
     "base": (-90.0, 90.0),
     "shoulder": (0.0, 120.0),
