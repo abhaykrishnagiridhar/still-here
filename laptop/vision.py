@@ -42,7 +42,7 @@ from models import Block, HeatZone
 from planner import PlanResult
 from route import RoutePlan
 from scale import ScaleEstimator, block_size_ok, to_mm
-from scene import build_scene, decide, path_in_px, scene_from_blocks, view_in_px
+from scene import Scene, build_scene, decide, path_in_px, scene_from_blocks, view_in_px
 from stream import FrameSource
 
 Point = tuple[int, int]
@@ -402,6 +402,10 @@ class FrameResult:
     heat_mask: np.ndarray
     result: Optional[Union[PlanResult, RoutePlan]]  # None until the block size is known
     report: Optional[str]  # text to print, set only when the plan has changed
+    scene: Optional[Scene] = None  # blocks, heat and survivor in millimetres, once the scale is known
+    origin: Optional[tuple[float, float]] = None  # the rover's place in the picture, in pixels
+    px_per_mm: Optional[float] = None
+    survivor: Optional[Point] = None  # where the survivor is in the picture, however it was found
 
 
 class Pipeline:
@@ -433,7 +437,9 @@ class Pipeline:
         ]
         return blocks_from_markers(in_mm, self._config.rules, self._config.block_mm)
 
-    def process(self, frame: np.ndarray, now: float) -> FrameResult:
+    def process(
+        self, frame: np.ndarray, now: float, survivor_hint: Optional[Point] = None
+    ) -> FrameResult:
         height, width = frame.shape[:2]
         origin = (width / 2.0, float(height))  # the rover is at the bottom centre of the picture
         if self._started_at is None:
@@ -443,6 +449,8 @@ class Pipeline:
         blurred = cv2.GaussianBlur(frame, (5, 5), 0)
         hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
         survivor = self._survivor_finder.update(cv2.cvtColor(blurred, cv2.COLOR_BGR2GRAY), now)
+        if survivor_hint is not None:
+            survivor = survivor_hint  # the operator tapped it, which beats the pulse search
         blocks_mask = red_mask(hsv)
         heat_mask = fire_mask(hsv)
 
@@ -494,7 +502,9 @@ class Pipeline:
         if warming_up:
             cv2.putText(shown, "Looking for the survivor light...", (10, 25),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, CYAN, 2)
-        return FrameResult(shown, blocks_mask, heat_mask, result, report)
+        return FrameResult(
+            shown, blocks_mask, heat_mask, result, report, scene, origin, px_per_mm, survivor
+        )
 
 
 def _clock_for(source: str):

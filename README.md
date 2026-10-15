@@ -121,10 +121,15 @@ still-here/
     test_sim_rover.py        Tests for the software rover
     vision.py                Colour-blob vision demo (ported from the C++ prototype) feeding the planner
     test_vision.py           Tests for the vision demo on synthetic pictures
-    server.py *              FastAPI and WebSocket link to the rover, serves the UI
+    server.py                Operator server: camera with the plan drawn on it, tap, approve, report
+    operator_core.py         What the operator sees and may approve; sends the plan to the rover
+    origin_guard.py          Only local pages may press the buttons
+    test_server.py           Tests for the server
+    test_operator.py         Tests for the operator logic
+    test_origin_guard.py     Tests for the origin rule
+    operator.css, operator.js  The operator page's style and script
     calibrate.py *           Camera pixels to arm position, one command to re-run
     trial_log.py *           Appends runs to trials.csv, applies the 5 mm / 10 degree rule
-    ui.html, ui.ts *         Operator page: tap survivor, see plan, final report
   firmware/
     main.cpp                 Boot stub, grows into the rover loop
     pins.h                   Pin map for the ESP32-S3 board: camera confirmed, the rest untested

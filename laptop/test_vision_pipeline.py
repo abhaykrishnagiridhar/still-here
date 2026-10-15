@@ -93,6 +93,26 @@ def test_a_blinking_light_is_the_survivor_and_the_route_is_used():
     assert last.result.ok
 
 
+def test_a_survivor_the_operator_tapped_is_used_without_any_pulsing():
+    pipeline = Pipeline()
+    last = None
+    for i in range(int(2.0 * FPS)):
+        last = pipeline.process(frame_with(), i / FPS, survivor_hint=(320, 100))
+
+    assert isinstance(last.result, RoutePlan)
+    assert last.survivor == (320, 100)
+    assert last.scene.survivor is not None
+
+
+def test_the_frame_result_carries_what_the_operator_page_needs_to_convert_taps():
+    pipeline, last, _ = run_pipeline()
+
+    assert last.origin == (320.0, 480.0)
+    assert last.px_per_mm == pytest.approx(pipeline.px_per_mm)
+    assert len(last.scene.blocks) == 3
+    assert last.survivor is None
+
+
 def test_the_report_is_only_printed_when_the_plan_changes():
     _, _, reports = run_pipeline(seconds=3.0)
 

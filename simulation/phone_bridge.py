@@ -9,12 +9,10 @@ to that address, or the browser will not give the page tilt readings.
 
 from __future__ import annotations
 
-import ipaddress
 import json
 import socket
 import time
 from pathlib import Path
-from urllib.parse import urlparse
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
@@ -26,6 +24,7 @@ if str(LAPTOP_DIR) not in sys.path:
     sys.path.insert(0, str(LAPTOP_DIR))
 
 from gyro_map import GyroSession
+from origin_guard import origin_allowed
 
 BLENDER_HOST = "127.0.0.1"
 BLENDER_PORT = 8766
@@ -45,27 +44,6 @@ class PhoneBridge:
             return None
         # Mode changes intentionally emit a stop then the new command. Blender can apply both in order.
         return {"kind": "command", "message": commands[-1]}
-
-
-def origin_allowed(origin: str | None) -> bool:
-    """Only pages served from this machine or the local network may drive the bridge.
-
-    Browsers always send an Origin header, so a page on the public internet is refused. That
-    stops it from opening this socket through the visitor's browser (cross-site hijacking).
-    Clients that send no Origin, such as scripts, are not browsers and are allowed.
-    """
-    if not origin:
-        return True
-    host = urlparse(origin).hostname
-    if host is None:
-        return False
-    if host == "localhost" or host.endswith(".localhost"):
-        return True
-    try:
-        address = ipaddress.ip_address(host)
-    except ValueError:
-        return False
-    return address.is_loopback or address.is_private or address.is_link_local
 
 
 app = FastAPI(title="STILL HERE phone-to-Blender bridge")

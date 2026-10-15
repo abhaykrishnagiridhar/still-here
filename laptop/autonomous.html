@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@200;400;600&display=swap">
   <link rel="stylesheet" href="landing.css?v=4">
+  <link rel="stylesheet" href="operator.css?v=1">
 </head>
 <body>
   <header class="topbar">
@@ -17,11 +18,47 @@
     </a>
   </header>
 
-  <main class="page">
+  <main class="operator">
     <p class="label">Autonomous mode</p>
-    <h1>Not connected.</h1>
-    <p class="lede">The rover can't plan or move on its own yet. Planning and the rover link are still being built. This page will start and show an autonomous run once they work.</p>
-    <p><a class="button" href="index.html">Back to the start</a></p>
+    <h1>Check the plan, then approve it.</h1>
+    <p class="status" id="status" role="status" aria-live="polite">Connecting to the server...</p>
+
+    <div class="workspace">
+      <figure class="camera">
+        <img id="video" src="/video" alt="Live camera view with the planned route and the blocks to remove drawn on it" width="640" height="480">
+        <span class="tap-mark" id="tap-mark" hidden></span>
+        <figcaption>Tap the survivor's light in the picture if the rover has not found it.</figcaption>
+      </figure>
+
+      <div class="panel">
+        <div class="actions">
+          <button class="button" id="approve" type="button" disabled>Approve plan</button>
+          <button class="button stop" id="stop" type="button" disabled>Stop the rover</button>
+          <button class="button ghost" id="clear-tap" type="button" hidden>Clear survivor spot</button>
+          <button class="button ghost" id="again" type="button" hidden>Start a new run</button>
+        </div>
+
+        <section aria-labelledby="remove-heading">
+          <h2 id="remove-heading">Blocks to remove, in order</h2>
+          <ol class="steps" id="steps"></ol>
+        </section>
+
+        <section aria-labelledby="stay-heading">
+          <h2 id="stay-heading">Blocks left in place</h2>
+          <ul class="kept" id="kept"></ul>
+        </section>
+
+        <section aria-label="Progress">
+          <div class="progress"><span id="progress-bar"></span></div>
+          <p class="progress-text" id="progress-text"></p>
+        </section>
+
+        <section class="report" id="report" aria-labelledby="report-heading" hidden>
+          <h2 id="report-heading">Report</h2>
+          <pre id="report-text"></pre>
+        </section>
+      </div>
+    </div>
   </main>
 
   <footer class="site-footer">
@@ -32,5 +69,7 @@
       <a href="privacy.html">Privacy</a>
     </nav>
   </footer>
+
+  <script src="operator.js?v=1"></script>
 </body>
 </html>

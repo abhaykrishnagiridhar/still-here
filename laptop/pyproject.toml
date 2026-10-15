@@ -16,7 +16,7 @@ dev = ["pytest", "pytest-cov", "httpx2"]
 firmware = ["platformio", "esptool", "pyserial"]
 
 [tool.setuptools]
-py-modules = ["aruco", "gyro_map", "models", "planner", "route", "scale", "scene", "sim_rover", "stream", "vision"]
+py-modules = ["aruco", "gyro_map", "models", "operator_core", "origin_guard", "planner", "route", "scale", "scene", "server", "sim_rover", "stream", "vision"]
 
 [tool.pytest.ini_options]
 testpaths = ["."]
