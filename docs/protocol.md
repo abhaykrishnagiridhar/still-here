@@ -69,3 +69,9 @@ Nothing above is changed. These describe what the laptop code and the software r
 7. **Who may connect.** The rover refuses a WebSocket connection whose `Origin` header names a site outside this machine or the local network (the same rule as `laptop/origin_guard.py`), and serves one operator at a time. Without this, any web page open on the same Wi-Fi could try to drive the rover.
 8. **The rover's name.** It announces itself on the network as `still-here` (mDNS), so the laptop reaches it at `still-here.local`, port 81 for commands and port 80 for `/stream`.
 9. **Limits.** Joint ranges are as in `laptop/plan_message.py` (`ARM_LIMITS_DEG`); the firmware should refuse anything outside them. The elbow reaches 135 degrees each way.
+
+10. **`bad_plan` details.** `could not read plan`, `unknown action`, `too many steps`, `a plan is running` (a new `plan` is refused while one runs), `no stored plan with that id`, `battery too low`.
+11. **Limits.** A message is at most 6144 bytes, a plan at most 32 steps, and step ids in a plan are unique. Anything longer, or not valid JSON, is ignored.
+12. **More event codes.** `battery_low` (pack under 6.8 V) and `battery_critical` (under 6.4 V: the motors stop and `drive`, `arm_pose` and `plan_start` are refused until the pack is back above 7.0 V), each with the voltage in `detail`. `obstacle` (`left` or `right`) when an IR obstacle sensor stops forward driving. `battery_v` is `null` until the pack-voltage divider is fitted.
+13. **`state.status`** is `running` while a plan runs, `holding` while a block is carried, `idle` otherwise. `step_id` is `null` when no plan is running.
+14. **Wheels and arm.** The wheels ramp to speed over about 200 ms. The wheels and the arm never move at the same moment: the last command wins, and `arm_pose` stops the wheels first. A closed connection stops the wheels at once when no plan is running.

@@ -172,6 +172,13 @@ still-here/
   firmware/
     main.cpp                 Joins Wi-Fi, starts the camera and the video server; the rover loop grows from here
     pins.h                   Pin map for the ESP32-S3 board: camera confirmed, the rest untested
+    rover_types.h, rover_json.h  Pose type and the strict message reader (no library, no heap)
+    rover_arm.h              Arm lengths, limits and kinematics, the same maths as sim_rover.py
+    rover_origin.h           Which web pages may connect, the same rule as origin_guard.py
+    rover_core.h             All rover behaviour: plans, link loss, safe stop, ramps, battery guard
+    hardware.cpp, hardware.h Real wheels, servos, sensors and battery reading (not bench-tested)
+    rover_link.cpp, rover_link.h  WebSocket server on port 81, origin check, mDNS (not bench-tested)
+    test_rover_*.cpp         PC tests for the four rover_*.h files
     platformio.ini           ESP32-S3 N16R8 build settings, flat layout
     secrets.example.h        Wi-Fi template for the 2.4 GHz phone hotspot
     rover_sketch.txt         Earlier all-in-one rover sketch, reference only, not built

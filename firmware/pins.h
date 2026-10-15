@@ -66,3 +66,21 @@ constexpr int PIN_DHT = -1;            // no free pin left; the DHT11 only reads
 // Pack voltage: 2S pack positive -> 100k -> this pin -> 33k -> GND (see docs/power.md).
 // GPIO 1 is on ADC1, which keeps working while Wi-Fi is on (ADC2 does not).
 constexpr int PIN_BATT_ADC = 1;
+
+// Set this to true ONLY once the 100k and 33k divider is wired and the `batt` command in
+// bringup.txt shows a sensible voltage. While it is false the firmware reports battery_v as null
+// and the low-battery guard (warn below 6.8 V, stop the motors below 6.4 V) stays out of the way,
+// because a floating pin would read garbage and could stop a healthy rover.
+constexpr bool BATTERY_DIVIDER_FITTED = false;
+constexpr float BATTERY_DIVIDER_TOP_K = 100.0f;
+constexpr float BATTERY_DIVIDER_BOTTOM_K = 33.0f;
+
+// The arm's servos stay unpowered at boot and come on the first time the arm is asked to move away
+// from the home pose, so a rover that is switched on never jerks by itself. Set true to power them
+// at boot instead (they will then jump to the home pose).
+constexpr bool ARM_POWER_ON_AT_BOOT = false;
+
+// Stop forward driving while an IR obstacle sensor is tripped (reversing stays allowed). Turn this on
+// only after `sensors` in bringup.txt shows each module reads 0 when something is in front of it and
+// 1 when clear. If a module reads the other way round the rover could never drive forward.
+constexpr bool IR_OBSTACLE_STOP_ENABLED = false;

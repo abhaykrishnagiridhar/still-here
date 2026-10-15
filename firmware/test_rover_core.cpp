@@ -500,6 +500,56 @@ static void a_closed_connection_does_not_stop_a_running_plan() {
     CHECK(r.sink.has("\"step_id\":2,\"ok\":true"));
 }
 
+// ---- obstacle stop --------------------------------------------------------------------------------
+
+static void the_obstacle_stop_is_off_unless_it_is_turned_on() {
+    Rig r;
+    r.hw.sensors.obstacleLeft = 1;
+    r.send("{\"type\":\"drive\",\"left\":1,\"right\":1}");
+    r.run(500);
+    CHECK(r.core.wheelLeft() > 0.9f);
+}
+
+static void a_tripped_obstacle_sensor_stops_forward_driving_and_says_so_once() {
+    Rig r;
+    r.core.setObstacleStop(true);
+    r.hw.sensors.obstacleRight = 1;
+    r.send("{\"type\":\"drive\",\"left\":1,\"right\":1}");
+    r.run(500);
+    CHECK(r.core.wheelLeft() == 0.0f && r.core.wheelRight() == 0.0f);
+    CHECK(r.sink.count("\"code\":\"obstacle\",\"detail\":\"right\"") == 1);
+}
+
+static void reversing_away_from_an_obstacle_is_allowed() {
+    Rig r;
+    r.core.setObstacleStop(true);
+    r.hw.sensors.obstacleLeft = 1;
+    r.hw.sensors.obstacleRight = 1;
+    r.send("{\"type\":\"drive\",\"left\":-1,\"right\":-1}");
+    r.run(500);
+    CHECK(r.core.wheelLeft() < -0.9f);
+}
+
+static void driving_forward_works_again_once_the_obstacle_is_gone() {
+    Rig r;
+    r.core.setObstacleStop(true);
+    r.hw.sensors.obstacleLeft = 1;
+    r.send("{\"type\":\"drive\",\"left\":1,\"right\":1}");
+    r.run(300);
+    r.hw.sensors.obstacleLeft = 0;
+    r.send("{\"type\":\"drive\",\"left\":1,\"right\":1}");
+    r.run(400);
+    CHECK(r.core.wheelLeft() > 0.9f);
+}
+
+static void a_sensor_that_is_not_fitted_never_stops_the_rover() {
+    Rig r;
+    r.core.setObstacleStop(true);  // sensors default to -1: not available
+    r.send("{\"type\":\"drive\",\"left\":1,\"right\":1}");
+    r.run(500);
+    CHECK(r.core.wheelLeft() > 0.9f);
+}
+
 static void the_clock_wrapping_around_does_not_upset_anything() {
     Rig r;
     r.now = 0xFFFFFFFFu - 500;
@@ -555,6 +605,11 @@ int main() {
     a_battery_that_cannot_be_read_never_stops_the_rover();
     a_closed_connection_stops_the_wheels_at_once_not_two_seconds_later();
     a_closed_connection_does_not_stop_a_running_plan();
+    the_obstacle_stop_is_off_unless_it_is_turned_on();
+    a_tripped_obstacle_sensor_stops_forward_driving_and_says_so_once();
+    reversing_away_from_an_obstacle_is_allowed();
+    driving_forward_works_again_once_the_obstacle_is_gone();
+    a_sensor_that_is_not_fitted_never_stops_the_rover();
     the_clock_wrapping_around_does_not_upset_anything();
     a_long_pause_is_not_one_giant_step();
 

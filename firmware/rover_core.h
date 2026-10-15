@@ -97,6 +97,7 @@ public:
 
         checkLink(nowMs);
         checkBattery();
+        if (obstacleStop_) limitForObstacles();
         if (running_) runPlan(nowMs);
         rampWheels(dt);
         if (wheelsStopped()) pose_ = stepToward(pose_, target_, dt, armSpeed_);  // the arm waits for the wheels
@@ -117,6 +118,11 @@ public:
     // two more seconds: with no plan running the wheels stop and the arm holds at once. A running
     // plan is NOT stopped (docs/protocol.md: it carries on and reports when the link returns).
     void connectionClosed(uint32_t nowMs) { lastPingMs_ = nowMs - LINK_TIMEOUT_MS - 1; }
+
+    // Stop forward driving while an IR obstacle sensor is tripped (reversing stays allowed). Leave it
+    // off until the sensors' polarity has been checked on the bench: one that always reads "tripped"
+    // would stop the rover ever driving forward.
+    void setObstacleStop(bool on) { obstacleStop_ = on; }
 
     // Read-only views, for tests and for the serial status line.
     const Pose& pose() const { return pose_; }
@@ -328,6 +334,24 @@ private:
         appliedRight_ = rampOne(appliedRight_, right, WHEEL_RAMP_PER_S * dt);
     }
 
+    void limitForObstacles() {
+        if (desiredLeft_ <= 0.0f && desiredRight_ <= 0.0f) {
+            obstacleSeen_ = false;
+            return;
+        }
+        SensorReadings s = hw_.readSensors();
+        if (s.obstacleLeft != 1 && s.obstacleRight != 1) {
+            obstacleSeen_ = false;
+            return;
+        }
+        if (desiredLeft_ > 0.0f) desiredLeft_ = 0.0f;
+        if (desiredRight_ > 0.0f) desiredRight_ = 0.0f;
+        if (!obstacleSeen_) {
+            obstacleSeen_ = true;
+            event("obstacle", s.obstacleLeft == 1 ? "left" : "right");
+        }
+    }
+
     // ---- watchdogs ----------------------------------------------------------------------------
     void checkLink(uint32_t nowMs) {
         if (!linkUp_ || nowMs - lastPingMs_ <= LINK_TIMEOUT_MS) return;
@@ -381,5 +405,6 @@ private:
     bool carrying_;
     float batteryV_;
     bool batteryWarned_, batteryStopped_;
+    bool obstacleStop_ = false, obstacleSeen_ = false;
     uint32_t nextStateMs_, nextSensorsMs_;
 };

@@ -24,3 +24,12 @@ foreach(t test_planner test_perception)
   add_executable(${t} ${t}.cpp)
   add_test(NAME ${t} COMMAND ${t})
 endforeach()
+
+# The rover's logic runs on the PC too (firmware/rover_*.h has no Arduino code in it). Built as
+# C++11, the standard the ESP32 core uses, so a test passing here means it will compile there.
+foreach(t test_rover_json test_rover_arm test_rover_origin test_rover_core)
+  add_executable(${t} firmware/${t}.cpp)
+  target_include_directories(${t} PRIVATE firmware)
+  set_target_properties(${t} PROPERTIES CXX_STANDARD 11 CXX_STANDARD_REQUIRED ON)
+  add_test(NAME ${t} COMMAND ${t})
+endforeach()
