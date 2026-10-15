@@ -26,8 +26,7 @@ from origin_guard import origin_allowed
 
 BLENDER_HOST = "127.0.0.1"
 BLENDER_PORT = 8766
-WS_POLICY_VIOLATION = 1008  # close code: the page is not allowed to drive the rover
-STOP_PACKET = {"kind": "command", "message": {"type": "drive", "left": 0.0, "right": 0.0}}
+WS_POLICY_VIOLATION = 1008  # A non-local web page may not control the rover.
 
 
 class PhoneBridge:
@@ -57,6 +56,22 @@ class PhoneBridge:
 
 app = FastAPI(title="STILL HERE phone-to-Blender bridge")
 
+EMERGENCY_STOP_MESSAGES = (
+    {"type": "abort"},
+    {"type": "drive", "left": 0.0, "right": 0.0},
+)
+
+
+def send_emergency_stop() -> None:
+    """Stop wheels and abort the active arm showcase without relying on WebSocket state."""
+    udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        for message in EMERGENCY_STOP_MESSAGES:
+            packet = {"kind": "command", "message": message}
+            udp.sendto(json.dumps(packet).encode("utf-8"), (BLENDER_HOST, BLENDER_PORT))
+    finally:
+        udp.close()
+
 
 @app.get("/health")
 def health() -> dict:
@@ -69,27 +84,29 @@ def phone_control() -> FileResponse:
     return FileResponse(Path(__file__).with_name("phone_control.html"))
 
 
+@app.post("/stop")
+def emergency_stop() -> dict:
+    """Emergency path used by the red phone button, even with a dead WebSocket."""
+    send_emergency_stop()
+    return {"ok": True}
+
+
 @app.websocket("/phone")
 async def phone_socket(websocket: WebSocket) -> None:
-    # Only pages from this machine or the local network may drive the rover, so a web page on the
-    # public internet cannot open this socket through a visitor's browser (see origin_guard.py).
+    # Do not let a public web page use a visitor's browser to control the rover.
     if not origin_allowed(websocket.headers.get("origin")):
         await websocket.close(code=WS_POLICY_VIOLATION)
         return
     await websocket.accept()
     bridge = PhoneBridge()
     udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-    def send(packet: dict) -> None:
-        udp.sendto(json.dumps(packet).encode("utf-8"), (BLENDER_HOST, BLENDER_PORT))
-
     try:
         while True:
             try:
                 incoming = await asyncio.wait_for(websocket.receive_text(), timeout=0.1)
             except TimeoutError:
                 for packet in bridge.idle(time.monotonic()):
-                    send(packet)
+                    udp.sendto(json.dumps(packet).encode("utf-8"), (BLENDER_HOST, BLENDER_PORT))
                 continue
             try:
                 sample = json.loads(incoming)
@@ -97,13 +114,13 @@ async def phone_socket(websocket: WebSocket) -> None:
             except (ValueError, TypeError, KeyError, AttributeError, OverflowError):
                 continue  # one unreadable sample is skipped; it never reaches the rover
             for packet in packets:
-                send(packet)
+                udp.sendto(json.dumps(packet).encode("utf-8"), (BLENDER_HOST, BLENDER_PORT))
     except WebSocketDisconnect:
         pass  # the stop below covers this
     finally:
-        # Whatever ended the connection (the phone left, bad data, or a crash in this handler),
-        # tell Blender to stop the wheels. Failing open would leave the last drive command running.
+        # Whatever ended the connection (the phone left, bad data, or a crash in this handler), tell
+        # Blender to stop. Failing open would leave the last drive command running.
         try:
-            send(STOP_PACKET)
+            send_emergency_stop()
         finally:
             udp.close()

@@ -115,7 +115,9 @@ void ArduinoRoverHardware::begin() {
     ledcWrite(WHEEL_PWM_RIGHT, 0);
     const int inputs[] = {PIN_IR_OBSTACLE_L, PIN_IR_OBSTACLE_R, PIN_IR_FLAME_L, PIN_IR_FLAME_R};
     for (int pin : inputs) {
-        if (pin >= 0) pinMode(pin, INPUT);
+        // The sensor modules read LOW when tripped, so the pin is pulled HIGH when nothing drives it.
+        // Without this an unplugged sensor (GPIO46 pulls down by default) looks like a fire.
+        if (pin >= 0) pinMode(pin, INPUT_PULLUP);
     }
     if (PIN_DHT >= 0) {
         g_dht = new DHT(PIN_DHT, DHT11);

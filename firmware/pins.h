@@ -11,7 +11,10 @@
 //   19, 20       native USB
 //   43, 44       UART0 (serial console)
 //   0            BOOT button
-//   3, 45, 46    strapping pins: avoid, or use only for inputs that are quiet while the board resets
+//   3, 45, 46    strapping pins, read ONCE at reset. NEVER put I2C on them: the servo driver board pulls
+//                SDA and SCL high, and a high GPIO45 at reset sets the flash voltage wrong, so the board
+//                resets over and over with only the ROM boot lines on the serial port. Use 46 only for an
+//                input that is quiet (low or unplugged) while the board starts.
 //   38, 39, 40   microSD slot. Each has a pull-up resistor on the board, so they suit inputs and
 //                the I2C bus, but NOT motor driver inputs (those would be held high at reset).
 //                Leave the SD slot empty.
@@ -49,16 +52,16 @@ constexpr int SERVO_CH_GRIPPER = 3;
 // ---- L298N motor driver -------------------------------------------------------------------
 // All six sit on pins with nothing else attached. Fit a 10k pull-down on each input so the
 // wheels stay still while the board resets.
-constexpr int PIN_MOTOR_L_EN = 41;   // ENA, speed
-constexpr int PIN_MOTOR_L_IN1 = 42;
+constexpr int PIN_MOTOR_L_EN = 38;   // ENA, speed
+constexpr int PIN_MOTOR_L_IN1 = 2;
 constexpr int PIN_MOTOR_L_IN2 = 47;
 constexpr int PIN_MOTOR_R_EN = 48;   // ENB, speed; also drives the board's RGB LED, which will flicker
 constexpr int PIN_MOTOR_R_IN1 = 21;
 constexpr int PIN_MOTOR_R_IN2 = 14;
 
 // ---- Sensors ------------------------------------------------------------------------------
-constexpr int PIN_IR_OBSTACLE_L = 38;  // SD slot pin, has a board pull-up: fine for an input
-constexpr int PIN_IR_OBSTACLE_R = 2;
+constexpr int PIN_IR_OBSTACLE_L = -1;  // SD slot pin, has a board pull-up: fine for an input
+constexpr int PIN_IR_OBSTACLE_R = -1;
 constexpr int PIN_IR_FLAME_L = 46;     // strapping pin: input only, check that the board still boots
 constexpr int PIN_IR_FLAME_R = -1;     // no free pin left for a second flame sensor
 constexpr int PIN_DHT = -1;            // no free pin left; the DHT11 only reads room temperature

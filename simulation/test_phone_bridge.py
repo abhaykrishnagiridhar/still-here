@@ -2,7 +2,6 @@
 
 import json
 import socket
-
 import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
@@ -27,14 +26,42 @@ def test_phone_page_has_a_compact_brand_and_mobile_safety_treatments():
     assert 'env(safe-area-inset-bottom)' in page
 
 
-def test_a_drive_sample_becomes_a_smoothed_wheel_command_after_calibration():
+def test_phone_page_wires_the_emergency_stop_button_to_stop():
+    page = (phone_bridge.Path(__file__).with_name("phone_control.html")).read_text(encoding="utf-8")
+
+    assert "document.querySelector('#stop').addEventListener('click', stop);" in page
+    assert "fetch('/stop', { method: 'POST', keepalive: true })" in page
+
+
+def test_http_emergency_stop_sends_a_direct_blender_stop(monkeypatch):
+    sent = []
+    monkeypatch.setattr(phone_bridge, "send_emergency_stop", lambda: sent.append(True))
+
+    assert phone_bridge.emergency_stop() == {"ok": True}
+    assert sent == [True]
+    assert phone_bridge.EMERGENCY_STOP_MESSAGES == (
+        {"type": "abort"},
+        {"type": "drive", "left": 0.0, "right": 0.0},
+    )
+
+
+def test_a_drive_sample_uses_the_phone_axis_inversions_after_calibration():
     bridge = phone_bridge.PhoneBridge()
     bridge.handle({"beta": 0, "gamma": 0, "mode": "drive"}, now=0.9)
 
     packet = bridge.handle({"beta": -30, "gamma": 0, "mode": "drive"}, now=1.0)
 
     assert packet["kind"] == "command"
-    assert packet["message"] == {"type": "drive", "left": 0.25, "right": 0.25}
+    assert packet["message"] == {"type": "drive", "left": -0.25, "right": -0.25}
+
+
+def test_a_side_tilt_uses_the_inverted_steering_axis():
+    bridge = phone_bridge.PhoneBridge()
+    bridge.handle({"beta": 0, "gamma": 0, "mode": "drive"}, now=0.9)
+
+    packet = bridge.handle({"beta": 0, "gamma": -30, "mode": "drive"}, now=1.0)
+
+    assert packet["message"] == {"type": "drive", "left": 0.25, "right": -0.25}
 
 
 def test_an_arm_sample_contains_the_protocol_arm_pose():
@@ -77,7 +104,14 @@ def test_idle_emits_one_safe_stop_after_phone_data_goes_stale():
     assert bridge.idle(now=2.0) == []
 
 
-# --- who may drive the rover: the origin rule must survive page changes -------------------------
+def test_explicit_stop_emits_zero_wheels_even_when_phone_controls_are_being_disabled():
+    bridge = phone_bridge.PhoneBridge()
+    bridge.handle_all({"beta": -25, "gamma": 0, "mode": "drive"}, now=1.0)
+
+    assert bridge.handle_all({"stop": True, "mode": "drive"}, now=1.1) == [
+        {"kind": "command", "message": {"type": "abort"}},
+        {"kind": "command", "message": {"type": "drive", "left": 0.0, "right": 0.0}},
+    ]
 
 
 @pytest.mark.parametrize(

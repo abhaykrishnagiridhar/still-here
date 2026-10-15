@@ -42,8 +42,9 @@ Four people, one owner per area. The gate comes first: nothing from Stage 2 or 3
 - [x] PCA9685 driver with speed limits, `pick` and `drop` (`hardware.cpp`, `rover_arm.h`, `rover_core.h`). The logic is tested on a PC; the servo mapping is an assumption until the bench test
 - [x] Plan buffer, link-loss behaviour, safe stop, wheel ramps, battery guard, obstacle stop (`rover_core.h`, 44 PC tests)
 - [x] Sensor readout (IR obstacle, IR flame, DHT11, battery) in `hardware.cpp`. The right flame sensor and the DHT11 have no pin yet, so they report `null`
-- [ ] Bench-test the real board: servo mapping, wheel directions, IR polarity, battery divider (start with `firmware/bringup.txt`)
-- [x] The laptop's real rover link (`laptop/rover_link.py`, `server.py --rover`). Tested against fakes; not yet tried against the real firmware
+- [x] Bench-test the real board with `firmware/bringup.txt`. The full firmware also runs on it: Wi-Fi, camera at about 8.7 fps, command link, and a 16-point protocol check from the laptop (2026-10-16)
+- [ ] With the wheels off the ground, check on the running firmware: servo directions and ranges (`SERVOS[]` in `hardware.cpp`), wheel directions, IR sensor polarity, then a first real two-step plan
+- [x] The laptop's real rover link (`laptop/rover_link.py`, `server.py --rover`). Tested against fakes, and connected to the real board on 2026-10-16 (about 4 s to connect by name, then 5 state reports a second)
 - [ ] Decide how to verify a grip, and what to do about the two missing sensor pins
 
 ## D, Hardware and tests

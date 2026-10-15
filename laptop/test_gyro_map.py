@@ -6,6 +6,11 @@ import gyro_map
 from gyro_map import GyroSession, arm_command, axis, clamp, drive_command
 
 STOP = {"type": "drive", "left": 0.0, "right": 0.0}
+ABORT = {"type": "abort"}
+# The handset switches in gyro_map.py flip a tilt axis for a phone that reports it the other way round.
+# These tests state the tilt in the original convention and let the switches decide the sign.
+FB = -1.0 if gyro_map.INVERT_FORWARD_BACK else 1.0  # +1 means the original convention
+LR = -1.0 if gyro_map.INVERT_LEFT_RIGHT else 1.0
 
 
 def settle(session, sample, start=1.0, count=60):
@@ -47,22 +52,22 @@ def test_halfway_between_the_dead_zone_and_full_tilt_gives_half_output():
 
 
 def test_tilting_the_top_edge_down_drives_forward():
-    assert drive_command(-30.0, 0.0) == (1.0, 1.0)
+    assert drive_command(-30.0, 0.0) == (FB, FB)
 
 
 def test_tilting_the_top_edge_up_drives_backward():
-    assert drive_command(30.0, 0.0) == (-1.0, -1.0)
+    assert drive_command(30.0, 0.0) == (-FB, -FB)
 
 
 def test_tilting_the_right_edge_down_turns_right_on_the_spot():
-    assert drive_command(0.0, 30.0) == (1.0, -1.0)
+    assert drive_command(0.0, 30.0) == (LR, -LR)
 
 
 def test_forward_plus_steer_never_asks_for_more_than_full_speed():
     left, right = drive_command(-30.0, 30.0)
 
     assert max(abs(left), abs(right)) == 1.0
-    assert left > right
+    assert (left - right) * LR > 0  # it still steers the way the tilt says
 
 
 def test_no_tilt_means_no_drive():
@@ -81,8 +86,8 @@ def test_a_level_phone_holds_the_arm_at_the_centre_pose():
 def test_tilting_swings_the_base_and_moves_the_shoulder():
     pose = arm_command(30.0, 30.0, -90.0, True)
 
-    assert pose["base"] == -90.0  # right edge down swings the arm right
-    assert pose["shoulder"] == 120.0
+    assert pose["base"] == -90.0 * LR  # right edge down swings the arm right
+    assert pose["shoulder"] == (120.0 if FB > 0 else 0.0)
 
 
 def test_the_elbow_is_limited_and_the_gripper_follows_the_button():
@@ -117,8 +122,8 @@ def test_holding_a_forward_tilt_drives_forward_at_full_speed():
 
     out = settle(session, {"beta": -30.0, "gamma": 0.0})
 
-    assert out[-1]["left"] == pytest.approx(1.0, abs=0.01)
-    assert out[-1]["right"] == pytest.approx(1.0, abs=0.01)
+    assert out[-1]["left"] == pytest.approx(FB, abs=0.01)
+    assert out[-1]["right"] == pytest.approx(FB, abs=0.01)
 
 
 def test_smoothing_means_one_jump_gives_only_part_of_the_tilt():
@@ -127,7 +132,7 @@ def test_smoothing_means_one_jump_gives_only_part_of_the_tilt():
 
     out = session.update({"beta": -30.0, "gamma": 0.0}, 0.05)
 
-    assert 0.0 < out[-1]["left"] < 0.5
+    assert 0.0 < out[-1]["left"] * FB < 0.5
 
 
 def test_calibrating_makes_the_current_hold_the_new_centre():
@@ -153,7 +158,8 @@ def test_a_stop_sample_stops_the_wheels():
     session.update({"beta": 0.0, "gamma": 0.0}, 0.0)
     settle(session, {"beta": -30.0, "gamma": 0.0})
 
-    assert session.update({"beta": -30.0, "gamma": 0.0, "stop": True}, 5.0) == [STOP]
+    assert session.update({"beta": -30.0, "gamma": 0.0, "stop": True}, 5.0) == [ABORT, STOP]
+    assert session.update({"stop": True}, 6.0) == [ABORT, STOP]  # a stop needs no tilt values at all
 
 
 def test_switching_to_arm_mode_stops_the_wheels_before_the_first_arm_pose():
@@ -242,7 +248,7 @@ def test_a_not_finite_sample_does_not_poison_the_later_ones():
 
     out = settle(session, {"beta": -30.0, "gamma": 0.0}, start=0.2)
 
-    assert out[-1]["left"] == pytest.approx(1.0, abs=0.01)
+    assert out[-1]["left"] == pytest.approx(FB, abs=0.01)
 
 
 def test_a_bad_elbow_is_ignored_and_the_mode_change_is_not_lost():

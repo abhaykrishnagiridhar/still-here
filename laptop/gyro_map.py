@@ -17,13 +17,19 @@ DEADZONE_DEG = 4.0  # ignore tiny wobble around the calibrated centre
 SMOOTHING = 0.35  # 0..1, higher follows the phone faster
 STALE_AFTER_S = 0.5  # no phone data for this long means stop the wheels
 
+# Galaxy M01 Core reports the tilt axes opposite to the original controller
+# convention. Keep these as explicit switches for quick calibration on a
+# different handset; True is the correct setting for the current phone.
+INVERT_FORWARD_BACK = True
+INVERT_LEFT_RIGHT = True
+
 SHOULDER_CENTRE_DEG = 60.0
 SHOULDER_SWING_DEG = 60.0
 BASE_SWING_DEG = 90.0
 ELBOW_LIMIT_DEG = 135.0
-DEFAULT_ELBOW_DEG = -90.0  # used when a sample says nothing about the elbow
 GRIPPER_OPEN_DEG = 90.0
 GRIPPER_CLOSED_DEG = 0.0
+DEFAULT_ELBOW_DEG = -90.0  # used when a sample says nothing about the elbow
 
 
 def clamp(value: float, low: float, high: float) -> float:
@@ -43,15 +49,25 @@ def drive_command(d_beta: float, d_gamma: float) -> tuple[float, float]:
     """(left, right) wheel speeds from tilt away from centre. Top edge down = forward."""
     throttle = -axis(d_beta)
     steer = axis(d_gamma)  # right edge down = turn right
+    if INVERT_FORWARD_BACK:
+        throttle = -throttle
+    if INVERT_LEFT_RIGHT:
+        steer = -steer
     left, right = throttle + steer, throttle - steer
     biggest = max(abs(left), abs(right), 1.0)
     return (left / biggest, right / biggest)
 
 
 def arm_command(d_beta: float, d_gamma: float, elbow: float, grip_open: bool) -> dict:
+    base_axis = -axis(d_gamma)
+    shoulder_axis = axis(d_beta)
+    if INVERT_LEFT_RIGHT:
+        base_axis = -base_axis
+    if INVERT_FORWARD_BACK:
+        shoulder_axis = -shoulder_axis
     return {
-        "base": -axis(d_gamma) * BASE_SWING_DEG,
-        "shoulder": SHOULDER_CENTRE_DEG + axis(d_beta) * SHOULDER_SWING_DEG,
+        "base": base_axis * BASE_SWING_DEG,
+        "shoulder": SHOULDER_CENTRE_DEG + shoulder_axis * SHOULDER_SWING_DEG,
         "elbow": clamp(elbow, -ELBOW_LIMIT_DEG, ELBOW_LIMIT_DEG),
         "gripper": GRIPPER_OPEN_DEG if grip_open else GRIPPER_CLOSED_DEG,
     }
@@ -73,6 +89,17 @@ class GyroSession:
         self._smooth = (beta, gamma)
 
     def update(self, sample: dict, now: float) -> list[dict]:
+        if not isinstance(sample, dict):
+            return []  # JSON can carry a list or a string: that is not a sample
+        # Emergency stop packets intentionally contain no orientation values.
+        # Handle them before parsing a normal motion sample so UI safety never
+        # depends on a sensor reading arriving in the same WebSocket message.
+        if sample.get("stop"):
+            self._stopped = True
+            return [
+                {"type": "abort"},
+                {"type": "drive", "left": 0.0, "right": 0.0},
+            ]
         # Check every number before anything is remembered. A half-read sample must not change the
         # mode, the centre or the smoothing, and NaN or infinity (which Python's JSON reader accepts)
         # must never become full-speed motion.
@@ -80,7 +107,7 @@ class GyroSession:
             beta = float(sample["beta"])
             gamma = float(sample["gamma"])
             elbow = float(sample.get("elbow", DEFAULT_ELBOW_DEG))
-        except (KeyError, TypeError, ValueError, AttributeError):
+        except (KeyError, TypeError, ValueError):
             return []
         if not all(isfinite(value) for value in (beta, gamma, elbow)):
             return []
@@ -92,9 +119,6 @@ class GyroSession:
         d_beta, d_gamma = self._smooth[0] - self._ref[0], self._smooth[1] - self._ref[1]
         self._last_sample_t = now
 
-        if sample.get("stop"):
-            self._stopped = True
-            return [{"type": "drive", "left": 0.0, "right": 0.0}]
         self._stopped = False
 
         mode = sample.get("mode", self._mode)
