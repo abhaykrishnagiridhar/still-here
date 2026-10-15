@@ -51,7 +51,7 @@ class BlockRules:
 class Config:
     """Every setting from config.toml. The defaults are the same as config.example.toml."""
 
-    rover_host: str = "192.168.0.50"
+    rover_host: str = "still-here.local"  # the rover announces this name on the network
     ws_port: int = 81
     stream_path: str = "/stream"
     block_mm: float = DEFAULT_BLOCK_MM

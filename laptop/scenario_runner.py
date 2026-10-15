@@ -101,16 +101,20 @@ def load_scenario(path: Path) -> dict:
 # --- the two kinds of rover -----------------------------------------------------------
 
 
+def world_blocks(scenario: dict) -> list[Block]:
+    """The blocks a scenario starts the software rover with."""
+    return [
+        Block(id=b["id"], marker_id=b["id"], x=float(b["x"]), y=float(b["y"]), layer=b.get("layer", 1))
+        for b in scenario.get("world", {}).get("blocks", [])
+    ]
+
+
 class SimTarget:
     """The software rover, set up with the blocks the scenario lists. Time moves only when
     poll() is called, so a scenario runs far faster than real time."""
 
     def __init__(self, scenario: dict) -> None:
-        blocks = [
-            Block(id=b["id"], marker_id=b["id"], x=float(b["x"]), y=float(b["y"]), layer=b.get("layer", 1))
-            for b in scenario.get("world", {}).get("blocks", [])
-        ]
-        self.rover = SimRover(blocks)
+        self.rover = SimRover(world_blocks(scenario))
         self._inbox: list[dict] = []
         self._since_ping = PING_S
 

@@ -1,7 +1,7 @@
 # Copy to config.toml (git-ignored) and edit.
 
 [rover]
-host = "192.168.0.50"      # IP the ESP32 gets on the phone hotspot
+host = "still-here.local"   # the name the rover announces on the network (or use its IP address)
 ws_port = 81
 stream_path = "/stream"
 

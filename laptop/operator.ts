@@ -3,7 +3,7 @@
 // server.py; this page only asks and shows. Text is always set with textContent.
 import { call } from "./api.js";
 import type { Ack, ReportBody, State } from "./api.js";
-import { BUSY_PHASES, END_PHASES, headlineFor, toDisplay, toFrame, toneFor } from "./ui_logic.js";
+import { BUSY_PHASES, END_PHASES, headlineFor, roverNotice, toDisplay, toFrame, toneFor } from "./ui_logic.js";
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const element = document.getElementById(id);
@@ -70,8 +70,9 @@ function drawMark(state: State): void {
 
 function render(state: State): void {
   current = state;
-  const tone = toneFor(state.phase, state.link_up, state.verified, state.camera_error);
-  setStatus(state.camera_error ?? state.message, tone);
+  const notice = roverNotice(state.rover_connected, state.rover_address, state.rover_error);
+  const tone = notice !== null ? "warn" : toneFor(state.phase, state.link_up, state.verified, state.camera_error);
+  setStatus(notice ?? state.camera_error ?? state.message, tone);
   headline.textContent = headlineFor(state.phase, state.verified);
 
   const plan = state.plan;
@@ -81,7 +82,7 @@ function render(state: State): void {
 
   const busy = BUSY_PHASES.includes(state.phase);
   const finished = END_PHASES.includes(state.phase);
-  approve.disabled = !state.can_approve;
+  approve.disabled = !state.can_approve || !state.rover_connected;
   stop.disabled = !busy;
   again.hidden = !finished;
   clearTap.hidden = state.survivor_px === null || busy || finished;

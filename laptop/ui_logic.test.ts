@@ -9,6 +9,7 @@ import {
   driveFor,
   headlineFor,
   keyDirection,
+  roverNotice,
   toDisplay,
   toFrame,
   toneFor,
@@ -81,4 +82,15 @@ test("a marker position is scaled to the size the picture is shown at", () => {
 test("busy and ended phases do not overlap", () => {
   assert.ok(BUSY_PHASES.every((phase) => !END_PHASES.includes(phase)));
   assert.ok(BUSY_PHASES.includes("verifying"));
+});
+
+test("a connected rover needs no notice", () => {
+  assert.equal(roverNotice(true, "ws://still-here.local:81", ""), null);
+});
+
+test("a rover that cannot be reached is named, and the reason is added when there is one", () => {
+  const plain = roverNotice(false, "ws://still-here.local:81", "");
+  assert.ok(plain?.includes("ws://still-here.local:81"));
+  assert.ok(plain?.includes("Nothing can be sent"));
+  assert.ok(roverNotice(false, "ws://x:81", "refused")?.endsWith("(refused)"));
 });

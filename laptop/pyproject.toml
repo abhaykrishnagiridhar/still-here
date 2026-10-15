@@ -16,7 +16,7 @@ dev = ["pytest", "pytest-cov", "httpx2"]
 firmware = ["platformio", "esptool", "pyserial"]
 
 [tool.setuptools]
-py-modules = ["aruco", "calibrate", "gyro_map", "manual_core", "marker_sheet", "models", "operator_core", "origin_guard", "plan_message", "planner", "report", "route", "run", "scale", "scenario_runner", "scene", "server", "sim_rover", "stream", "trial_log", "vision"]
+py-modules = ["aruco", "calibrate", "gyro_map", "manual_core", "marker_sheet", "models", "operator_core", "origin_guard", "plan_message", "planner", "report", "rover_link", "route", "run", "scale", "scenario_runner", "scene", "server", "sim_rover", "sim_server", "stream", "trial_log", "vision"]
 
 [tool.pytest.ini_options]
 testpaths = ["."]

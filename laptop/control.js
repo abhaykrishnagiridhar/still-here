@@ -4,7 +4,7 @@
 // server stops the wheels by itself if the commands stop. All work is done by server.py.
 import { call } from "./api.js";
                                            
-import { BUSY_PHASES, clamp, driveFor, keyDirection } from "./ui_logic.js";
+import { BUSY_PHASES, clamp, driveFor, keyDirection, roverNotice } from "./ui_logic.js";
                                                
 
 const $ =                        (id        )    => {
@@ -108,11 +108,15 @@ async function poll()                {
   try {
     const state = await call       ("/api/state", "GET");
     planRunning = BUSY_PHASES.includes(state.phase);
-    setControlsEnabled(!planRunning);
-    if (planRunning) {
+    const notice = roverNotice(state.rover_connected, state.rover_address, state.rover_error);
+    setControlsEnabled(!planRunning && notice === null);
+    if (notice !== null) {
+      release(false);
+      say(notice, true);
+    } else if (planRunning) {
       release(false);
       say("An approved plan is running, so manual control is off. Stop it on the autonomous page.", true);
-    } else if (statusLine.dataset.tone === "warn" && statusLine.textContent?.includes("plan is running")) {
+    } else if (statusLine.dataset.tone === "warn" && /plan is running|Not connected to the rover/.test(statusLine.textContent ?? "")) {
       say("Ready. Hold a button or W A S D to drive.");
     }
   } catch {

@@ -135,6 +135,9 @@ still-here/
     test_vision.py           Tests for the vision demo on synthetic pictures
     server.py                Operator server: camera with the plan drawn on it, tap, approve, report
     operator_core.py         What the operator sees and may approve; sends the plan to the rover
+    rover_link.py            The server's WebSocket link to the rover: pings every 0.5 s, reconnects by itself
+    sim_server.py            The software rover as a WebSocket server, to test the real link with no hardware
+    test_rover_link.py, test_sim_server.py  Tests for the link and the software rover server
     manual_core.py           Manual drive and arm commands, with a stop if the page goes quiet
     marker_sheet.py          Makes a printable sheet of ArUco block markers
     api.ts, ui_logic.ts      Page code shared by both pages: server calls and the plain decisions
@@ -225,10 +228,10 @@ pytest
 Run the operator pages (camera, plan, approve, report) and the manual control page:
 
 ```bash
-python server.py              # webcam 0; or a stream URL, or a video file
+python server.py              # the real rover (still-here.local) and its video; --simulate for no hardware
 ```
 
-Then open http://127.0.0.1:8000/ for autonomous mode and http://127.0.0.1:8000/control.html for manual control. Until the real rover link is built, an approved plan runs on a simulated rover.
+Then open http://127.0.0.1:8000/ for autonomous mode and http://127.0.0.1:8000/control.html for manual control. The server finds the rover by its name, `still-here.local` (set in `config.toml`, or pass `--rover <name or address>`), and the rover firmware is expected to announce that name on the network. If the rover cannot be reached the pages say so and send nothing. With no hardware, use `python server.py clip.avi --simulate`, or run `python sim_server.py` in another window (the software rover as a WebSocket server) and start the server with `--rover 127.0.0.1` to try the whole real-rover path.
 
 First-time setup, in this order:
 

@@ -67,11 +67,20 @@ const HEADLINES: Record<string, string> = {
   aborted: "The run was stopped.",
 };
 
+const FALLBACK_HEADLINE = "Looking at the scene.";
+
 export function headlineFor(phase: string, verified: boolean | null): string {
   if (phase === "done") {
     return verified ? "The way is clear." : "The rover finished, but it is not confirmed.";
   }
-  return HEADLINES[phase] ?? HEADLINES.scanning;
+  return HEADLINES[phase] ?? FALLBACK_HEADLINE;
+}
+
+// What to tell the person when the laptop cannot reach the rover, or null when it can.
+export function roverNotice(connected: boolean, address: string, error: string): string | null {
+  if (connected) return null;
+  const detail = error ? ` (${error})` : "";
+  return `Not connected to the rover at ${address}. Nothing can be sent until it is.${detail}`;
 }
 
 const WARN_PHASES = ["blocked", "aborted", "need_survivor"];

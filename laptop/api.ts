@@ -33,6 +33,9 @@ export interface State {
   verified: boolean | null;
   frame: { w: number; h: number };
   camera_error: string | null;
+  rover_connected: boolean;
+  rover_address: string;
+  rover_error: string;
 }
 
 export interface ReportBody {

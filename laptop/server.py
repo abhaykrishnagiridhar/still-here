@@ -1,14 +1,17 @@
 """The operator server: serves the pages, the live video with the plan drawn on it, and the
-buttons (tap the survivor, approve, abort, report).
+buttons (tap the survivor, approve, abort, report, drive by hand).
 
 Run it from the laptop folder:
-    python server.py                     webcam 0, then open http://127.0.0.1:8000/
-    python server.py 1                   webcam 1
-    python server.py http://192.168.0.50/stream
-    python server.py clip.avi
+    python server.py                       the real rover: still-here.local, and its own video stream
+    python server.py --rover 192.168.0.50  the real rover at an address (add :port if it is not 81)
+    python server.py 1                     use webcam 1 for the picture instead of the rover's stream
+    python server.py clip.avi --simulate   the software rover and a recorded clip, no hardware
+Then open http://127.0.0.1:8000/ (autonomous) or http://127.0.0.1:8000/control.html (manual).
 
-Until the real rover link is built, an approved plan runs on a simulated rover (sim_rover.py)
-that is set up with the blocks the camera sees. Every other part is the real thing.
+The rover's name, port and stream path come from config.toml ([rover]); the rover firmware is
+expected to announce the name still-here on the network. If the rover cannot be reached, the pages
+say so and nothing is sent. To try the whole real-rover path with no hardware, run
+`python sim_server.py` in another window and start this with `--rover 127.0.0.1`.
 
 Only pages from this machine or the local network may press a button (origin_guard.py). The
 server listens on this machine only unless you pass --host.
@@ -33,9 +36,10 @@ from calibrate import DEFAULT_FILE as CALIBRATION_FILE
 from calibrate import Calibration
 from calibrate import load as load_calibration
 from manual_core import Manual
-from operator_core import Operator
+from operator_core import Link, Operator
 from origin_guard import origin_allowed
 from report import build_report, choose_summary, write_report
+from rover_link import RealLink
 from sim_rover import SimRover
 from stream import FrameSource
 from vision import MAX_FAILED_READS, MAX_RECONNECTS, Pipeline, clock_for, open_source
@@ -109,6 +113,10 @@ class SimLink:
     """A rover that exists only in software. When a plan arrives it is set up with the blocks the
     camera currently sees, so picking them up has something to find."""
 
+    connected = True  # a software rover is always there
+    address = "the simulated rover"
+    last_error = ""
+
     def __init__(self, get_blocks: Callable[[], Sequence]) -> None:
         self._get_blocks = get_blocks
         self._rover = SimRover()
@@ -159,6 +167,7 @@ def create_app(
     report_path: Path = REPORT_FILE,
     calibration: Optional[Calibration] = None,
     manual_clock: Callable[[], float] = time.monotonic,
+    link: Optional[Link] = None,
 ) -> FastAPI:
     """Build the server. With a source it also reads that camera once it is started; with
     none (as in tests) nothing runs in the background."""
@@ -170,7 +179,7 @@ def create_app(
         with lock:
             return holder["operator"].latest_blocks()
 
-    link = SimLink(blocks_seen)
+    link = link if link is not None else SimLink(blocks_seen)
     operator = Operator(link)
     holder["operator"] = operator
     capture = Capture(Pipeline(config, calibration), operator, lock)
@@ -184,6 +193,14 @@ def create_app(
             finished = operator.take_finished_facts()
         if finished is not None:  # a run just ended: save the report file and chime once
             report_writer(finished, str(report_path), choose_summary(build_report(finished)))
+
+    def require_rover() -> None:
+        if not getattr(link, "connected", True):
+            raise HTTPException(
+                status_code=409,
+                detail=f"The rover is not connected ({getattr(link, 'address', '')}). Nothing was sent. "
+                "It stops by itself when it hears nothing for 2 seconds.",
+            )
 
     def guard(request: Request) -> None:
         if not origin_allowed(request.headers.get("origin")):
@@ -223,8 +240,14 @@ def create_app(
         if source is not None:
             for target in (run_rover, read_camera):
                 threading.Thread(target=target, daemon=True).start()
+        starter = getattr(link, "start", None)
+        if starter is not None:
+            starter()  # a real rover link connects in the background and keeps itself connected
         yield
         stop.set()
+        closer = getattr(link, "close", None)
+        if closer is not None:
+            closer()
 
     app = FastAPI(title="STILL HERE operator", lifespan=lifespan)
     app.state.source = source
@@ -249,6 +272,9 @@ def create_app(
             body = operator.state()
             body["frame"] = {"w": capture.frame_size[0], "h": capture.frame_size[1]}
             body["camera_error"] = capture.error
+            body["rover_connected"] = bool(getattr(link, "connected", True))
+            body["rover_address"] = str(getattr(link, "address", ""))
+            body["rover_error"] = str(getattr(link, "last_error", ""))
             return body
 
     @app.get("/api/report", dependencies=[Depends(guard)])
@@ -273,6 +299,7 @@ def create_app(
 
     @app.post("/api/approve", dependencies=[Depends(guard)])
     def approve(approval: Approval) -> dict:
+        require_rover()
         with lock:
             outcome = operator.approve(approval.key)
         if not outcome.ok:
@@ -298,16 +325,19 @@ def create_app(
 
     @app.post("/api/manual/drive", dependencies=[Depends(guard)])
     def manual_drive(body: Drive) -> dict:
+        require_rover()
         with lock:
             return refused_or_ok(manual.drive(body.left, body.right))
 
     @app.post("/api/manual/arm", dependencies=[Depends(guard)])
     def manual_arm(body: ArmPose) -> dict:
+        require_rover()
         with lock:
             return refused_or_ok(manual.arm_pose(body.base, body.shoulder, body.elbow, body.gripper, body.speed))
 
     @app.post("/api/manual/stop", dependencies=[Depends(guard)])
     def manual_stop() -> dict:
+        require_rover()
         with lock:
             return refused_or_ok(manual.stop())
 
@@ -320,11 +350,32 @@ def create_app(
     return app
 
 
+def choose_rover(
+    simulate: bool, rover_arg: Optional[str], source_arg: Optional[str], config: Config
+) -> tuple[Optional[RealLink], str]:
+    """The rover link and the camera source to use. The rover is `still-here.local` (or whatever
+    config.toml says) unless --rover names another; --simulate uses the software rover and a webcam."""
+    if simulate:
+        return None, source_arg or "0"
+    host, port = config.rover_host, config.ws_port
+    if rover_arg:
+        host, _, port_text = rover_arg.partition(":")
+        if not host:
+            raise ValueError("--rover needs a name or address, such as still-here.local or 192.168.0.50:81")
+        if port_text:
+            if not port_text.isdigit() or not 0 < int(port_text) < 65536:
+                raise ValueError(f"--rover port must be a number from 1 to 65535, got {port_text!r}")
+            port = int(port_text)
+    return RealLink(host, port), source_arg or f"http://{host}{config.stream_path}"
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     from aruco import load_config
 
     parser = argparse.ArgumentParser(description="STILL HERE operator server")
-    parser.add_argument("source", nargs="?", default="0", help="webcam number, stream URL or video file")
+    parser.add_argument("source", nargs="?", help="webcam number, stream URL or video file (default: the rover's own stream)")
+    parser.add_argument("--rover", help="the rover's name or address, optionally with a port (default: config.toml, normally still-here.local)")
+    parser.add_argument("--simulate", action="store_true", help="use the software rover and a webcam, with no real rover")
     parser.add_argument("--host", default="127.0.0.1", help="use 0.0.0.0 to open it to the local network")
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
@@ -337,9 +388,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if calibration is None:
         print("No calibration.json: using a flat scale from the block size. "
               "For a camera at an angle, run calibrate.py.")
+    try:
+        link, source = choose_rover(args.simulate, args.rover, args.source, config)
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return 1
+    print(f"Rover: {link.address}" if link is not None else "Rover: the simulated rover (--simulate)")
+    print(f"Camera: {source}")
     import uvicorn
 
-    uvicorn.run(create_app(args.source, config, calibration=calibration), host=args.host, port=args.port)
+    uvicorn.run(create_app(source, config, calibration=calibration, link=link), host=args.host, port=args.port)
     return 0
 
 

@@ -390,3 +390,134 @@ def test_a_drive_command_that_is_not_two_numbers_is_refused(manual_app, body):
     client = TestClient(manual_app)
 
     assert client.post("/api/manual/drive", json=body, headers=LOCAL).status_code == 422
+
+
+# --- the real rover link ---------------------------------------------------------------------
+
+
+class UnreachableRover:
+    """A link whose rover cannot be reached, so every send is refused."""
+
+    connected = False
+    address = "ws://still-here.local:81"
+    last_error = "OSError: no route"
+
+    def __init__(self):
+        self.sent = []
+
+    def send(self, message):
+        self.sent.append(message)
+        return False
+
+    def advance(self, dt):
+        return []
+
+
+def test_the_state_says_the_simulated_rover_is_connected(client):
+    state = client.get("/api/state").json()
+
+    assert state["rover_connected"] is True
+    assert "simulated" in state["rover_address"]
+
+
+def test_the_state_says_when_the_real_rover_cannot_be_reached():
+    link = UnreachableRover()
+    client = TestClient(server.create_app(source=None, link=link))
+
+    state = client.get("/api/state").json()
+
+    assert state["rover_connected"] is False
+    assert state["rover_address"] == "ws://still-here.local:81"
+    assert "no route" in state["rover_error"]
+
+
+def test_nothing_that_moves_the_rover_is_accepted_while_it_cannot_be_reached():
+    link = UnreachableRover()
+    app = server.create_app(source=None, link=link)
+    client = TestClient(app)
+    feed(app)
+    key = plan_key(client)
+
+    for path, body in (
+        ("/api/approve", {"key": key}),
+        ("/api/manual/drive", {"left": 1, "right": 1}),
+        ("/api/manual/arm", {"base": 0, "shoulder": 60, "elbow": -90, "gripper": 0}),
+        ("/api/manual/stop", None),
+    ):
+        response = client.post(path, json=body, headers=LOCAL)
+        assert response.status_code == 409, path
+        assert "not connected" in response.json()["detail"].lower()
+    assert link.sent == []
+    assert client.get("/api/state").json()["phase"] == "plan_ready"  # still waiting to be approved
+
+
+def test_a_whole_run_goes_through_the_real_link_to_a_rover_on_the_network():
+    from rover_link import RealLink
+    from sim_server import SimRoverServer
+    import time as clock
+
+    rover = SimRoverServer(WALL, speed=6.0).start()
+    link = RealLink("127.0.0.1", rover.port, retry_s=0.2)
+    app = server.create_app(source=None, link=link, report_writer=lambda *a: None)
+    try:
+        with TestClient(app) as client:
+            deadline = clock.monotonic() + 5
+            while clock.monotonic() < deadline and not client.get("/api/state").json()["rover_connected"]:
+                clock.sleep(0.05)
+            assert client.get("/api/state").json()["rover_connected"] is True
+
+            feed(app)
+            assert client.post("/api/approve", json={"key": plan_key(client)}, headers=LOCAL).status_code == 200
+
+            deadline = clock.monotonic() + 25
+            while clock.monotonic() < deadline and client.get("/api/state").json()["phase"] != "verifying":
+                app.state.advance(0.05)
+                clock.sleep(0.05)
+            state = client.get("/api/state").json()
+            assert state["phase"] == "verifying"
+            assert state["progress"]["done"] == state["progress"]["total"] > 0
+            assert rover.rover._stored is not None  # the plan really reached the rover over the socket
+    finally:
+        rover.close()
+
+
+def test_choosing_the_real_rover_uses_its_name_from_the_config_and_its_own_video():
+    from aruco import Config
+
+    link, source = server.choose_rover(False, None, None, Config())
+
+    assert (link.host, link.port) == ("still-here.local", 81)
+    assert source == "http://still-here.local/stream"
+
+
+def test_a_rover_given_on_the_command_line_wins_and_may_carry_a_port():
+    from aruco import Config
+
+    link, source = server.choose_rover(False, "192.168.0.50:8081", None, Config())
+
+    assert (link.host, link.port) == ("192.168.0.50", 8081)
+    assert source == "http://192.168.0.50/stream"
+
+
+def test_an_explicit_camera_source_is_kept():
+    from aruco import Config
+
+    _, source = server.choose_rover(False, None, "2", Config())
+
+    assert source == "2"
+
+
+def test_simulating_uses_the_software_rover_and_a_webcam():
+    from aruco import Config
+
+    link, source = server.choose_rover(True, None, None, Config())
+
+    assert link is None and source == "0"
+
+
+@pytest.mark.parametrize("rover", [":81", "host:abc", "host:0", "host:70000"])
+def test_a_bad_rover_argument_is_explained(rover):
+    from aruco import Config
+
+    with pytest.raises(ValueError, match="--rover"):
+        server.choose_rover(False, rover, None, Config())
