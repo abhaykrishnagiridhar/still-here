@@ -151,6 +151,12 @@ still-here/
     test_vision.py           Tests for the vision demo on synthetic pictures
     server.py                Operator server: camera with the plan drawn on it, tap, approve, report
     operator_core.py         What the operator sees and may approve; sends the plan to the rover
+    plan_message.py          Builds and checks the messages sent to the rover (whole-number plan ids)
+    report.py                Fact-first run report, with a summary only from an allowed list, and a chime
+    run.py                   Console run of the same protocol steps against a rover link you supply
+    test_plan_message.py     Tests for the messages
+    test_report.py           Tests for the report
+    test_run.py              Tests for the console run
     origin_guard.py          Only local pages may press the buttons
     test_server.py           Tests for the server
     test_operator.py         Tests for the operator logic

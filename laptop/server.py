@@ -31,9 +31,10 @@ from pydantic import BaseModel
 from aruco import Config
 from operator_core import Operator
 from origin_guard import origin_allowed
+from report import build_report, choose_summary, write_report
 from sim_rover import SimRover
 from stream import FrameSource
-from vision import MAX_FAILED_READS, MAX_RECONNECTS, Pipeline, _clock_for, open_source
+from vision import MAX_FAILED_READS, MAX_RECONNECTS, Pipeline, clock_for, open_source
 
 LAPTOP_DIR = Path(__file__).resolve().parent
 # Only these files are ever served, so config.toml and the source code never are.
@@ -45,6 +46,7 @@ FRAME_SIZE = (640, 480)
 STEP_S = 0.05  # how often the simulated rover is advanced
 PING_S = 0.5
 JPEG_QUALITY = 80
+REPORT_FILE = LAPTOP_DIR / "safe_path_report.json"  # git-ignored; rewritten when a run ends
 FILE_FRAME_S = 1 / 30  # a video file is played at about 30 pictures a second
 
 
@@ -133,7 +135,12 @@ class Approval(BaseModel):
     key: str
 
 
-def create_app(source: Optional[str] = None, config: Optional[Config] = None) -> FastAPI:
+def create_app(
+    source: Optional[str] = None,
+    config: Optional[Config] = None,
+    report_writer: Callable = write_report,
+    report_path: Path = REPORT_FILE,
+) -> FastAPI:
     """Build the server. With a source it also reads that camera once it is started; with
     none (as in tests) nothing runs in the background."""
     lock = threading.RLock()
@@ -153,6 +160,9 @@ def create_app(source: Optional[str] = None, config: Optional[Config] = None) ->
         with lock:
             operator.on_rover(link.advance(dt))
             operator.tick()
+            finished = operator.take_finished_facts()
+        if finished is not None:  # a run just ended: save the report file and chime once
+            report_writer(finished, str(report_path), choose_summary(build_report(finished)))
 
     def guard(request: Request) -> None:
         if not origin_allowed(request.headers.get("origin")):
@@ -171,7 +181,7 @@ def create_app(source: Optional[str] = None, config: Optional[Config] = None) ->
             max_reconnects=0 if is_file else MAX_RECONNECTS,
             sleep=time.sleep,
         )
-        clock = _clock_for(source)
+        clock = clock_for(source)
         try:
             while not stop.is_set():
                 frame = frames.read()

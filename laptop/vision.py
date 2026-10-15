@@ -507,7 +507,7 @@ class Pipeline:
         )
 
 
-def _clock_for(source: str):
+def clock_for(source: str):
     """A video file is read much faster than it was filmed, so it gets its own frame clock.
     A camera uses the real clock."""
     if not os.path.isfile(source):
@@ -537,7 +537,7 @@ def run(source: str = "0", show_masks: bool = False) -> int:
     except ValueError as error:
         print(f"Config problem: {error}", file=sys.stderr)
         return 1
-    clock = _clock_for(source)
+    clock = clock_for(source)
 
     print("--- Rover vision and planning started (ESC to quit) ---", flush=True)
     try:

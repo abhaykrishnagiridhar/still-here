@@ -10,6 +10,9 @@ The safety rules:
 - The plan is sent first and started only once the rover's own state shows that plan's id
   (docs/protocol.md: the rover must confirm before `plan_start`).
 - Once approved, new pictures no longer change the plan. The rover runs exactly what was approved.
+- "Done" means the camera agrees: after the rover says it finished, the way to the survivor must
+  look clear in several pictures in a row. The rover's own word is not enough, so a run the
+  camera cannot confirm is reported as not verified.
 """
 
 import hashlib
@@ -18,12 +21,18 @@ import time
 from dataclasses import dataclass
 from typing import Callable, Optional, Protocol
 
+from plan_message import build_abort_message, build_plan_message, build_plan_start_message
+from report import build_report, choose_summary, render_report
 from route import RoutePlan
 
 # Where picked blocks are put down, in the arm frame (mm). An assumption until the rover is built.
 DROP_POINT_MM = (100.0, -90.0)
 BLOCK_HEIGHT_MM = 40.0
 CONFIRM_TIMEOUT_S = 3.0  # how long the rover has to confirm a plan before it is cancelled
+VERIFY_PICTURES = 3  # clear pictures in a row that confirm the way is open
+VERIFY_TIMEOUT_S = 8.0  # how long the camera has to confirm before the run is called unverified
+BUSY_PHASES = ("waiting", "running", "verifying")
+ENDED_PHASES = ("done", "aborted")
 
 
 class Link(Protocol):
@@ -83,6 +92,12 @@ class Operator:
         self._approved_at = 0.0
         self._note = ""
         self._link_up = True
+        self._verified: Optional[bool] = None
+        self._clear_pictures = 0
+        self._finished_at = 0.0
+        self._obstacles = 0
+        self._obstacle_active = False
+        self._facts_handed_over = False
 
     def reset(self) -> None:
         """Start a fresh run. The tapped survivor is forgotten with it."""
@@ -105,6 +120,17 @@ class Operator:
         if self._phase in ("waiting", "running"):
             return  # the approved plan is not changed by what the camera sees now
         self._latest = seen
+        if self._phase == "verifying":
+            self._check_the_way_is_clear(seen)
+
+    def _check_the_way_is_clear(self, seen) -> None:
+        result = seen.result
+        clear = isinstance(result, RoutePlan) and result.ok and not result.order
+        self._clear_pictures = self._clear_pictures + 1 if clear else 0
+        if self._clear_pictures >= VERIFY_PICTURES:
+            self._verified = True
+            self._phase = "done"
+            self._note = "Confirmed by the camera: the way to the survivor is clear."
 
     def latest_blocks(self) -> tuple:
         """The blocks (in millimetres) in the newest picture, for a simulated rover to copy."""
@@ -130,7 +156,7 @@ class Operator:
 
     # ---- approving ---------------------------------------------------------------
     def approve(self, key: str) -> Outcome:
-        if self._phase in ("waiting", "running", "done", "aborted"):
+        if self._phase in BUSY_PHASES or self._phase in ENDED_PHASES:
             return Outcome(False, "A plan has already been approved. Start a new run first.")
         _, _, view, can_approve = self._assess()
         if not can_approve or view is None:
@@ -141,7 +167,9 @@ class Operator:
         for item in view["order"]:
             for action, x, y in (("pick", item["x"], item["y"]), ("drop", self._drop[0], self._drop[1])):
                 steps.append({"id": len(steps) + 1, "action": action, "x": x, "y": y, "z": self._block_mm / 2})
-        self._plan_id = self._next_plan_id
+        plan_id = self._next_plan_id
+        message = build_plan_message(plan_id, steps)  # checked before it can reach the rover
+        self._plan_id = plan_id
         self._next_plan_id += 1
         self._steps = steps
         self._frozen = view
@@ -151,21 +179,27 @@ class Operator:
         self._approved_at = self._clock()
         self._phase = "waiting"
         self._note = "Waiting for the rover to confirm the plan."
-        self._link.send({"type": "plan", "plan_id": self._plan_id, "steps": steps})
+        self._link.send(message)
         return Outcome(True, self._note)
 
     def abort(self) -> None:
-        self._link.send({"type": "abort"})
-        if self._phase in ("waiting", "running"):
+        self._link.send(build_abort_message())
+        if self._phase in BUSY_PHASES:
             self._phase = "aborted"
             self._note = "Stopped by the operator."
 
     def tick(self) -> None:
-        """Call regularly: gives up on a rover that never confirms the plan."""
-        if self._phase == "waiting" and self._clock() - self._approved_at > CONFIRM_TIMEOUT_S:
-            self._link.send({"type": "abort"})
+        """Call regularly: gives up on a rover that never confirms the plan, and calls a run
+        unverified when the camera never confirms the way is clear."""
+        now = self._clock()
+        if self._phase == "waiting" and now - self._approved_at > CONFIRM_TIMEOUT_S:
+            self._link.send(build_abort_message())
             self._phase = "aborted"
             self._note = "The rover did not confirm the plan, so it was cancelled."
+        elif self._phase == "verifying" and now - self._finished_at > VERIFY_TIMEOUT_S:
+            self._verified = False
+            self._phase = "done"
+            self._note = "The rover finished, but the camera still sees blocks in the way. Not verified."
 
     # ---- what the rover says -----------------------------------------------------
     def on_rover(self, messages: list[dict]) -> None:
@@ -177,18 +211,31 @@ class Operator:
                 self._results[message["step_id"]] = (bool(message["ok"]), message.get("reason", ""))
             elif kind == "event":
                 self._on_event(message.get("code"))
+            elif kind == "sensors":
+                self._count_obstacle_trips(message)
+
+    def _count_obstacle_trips(self, message: dict) -> None:
+        """Each time an IR obstacle sensor goes from quiet to tripped counts once."""
+        if self._plan_id is None:
+            return
+        tripped = any((message.get("ir_obstacle") or {}).values())
+        if tripped and not self._obstacle_active:
+            self._obstacles += 1
+        self._obstacle_active = tripped
 
     def _on_state(self, message: dict) -> None:
         if self._phase == "waiting" and message.get("plan_id") == self._plan_id:
-            self._link.send({"type": "plan_start", "plan_id": self._plan_id})
+            self._link.send(build_plan_start_message(self._plan_id))
             self._phase = "running"
             self._note = "Running the approved plan."
 
     def _on_event(self, code: Optional[str]) -> None:
         if code == "plan_finished" and self._phase == "running":
-            self._phase = "done"
-            self._note = "The rover finished the plan."
-        elif code == "aborted" and self._phase in ("waiting", "running"):
+            self._phase = "verifying"
+            self._finished_at = self._clock()
+            self._clear_pictures = 0
+            self._note = "The rover finished. Checking with the camera that the way is clear."
+        elif code == "aborted" and self._phase in BUSY_PHASES:
             self._phase = "aborted"
             self._note = "The rover stopped."
         elif code == "bad_plan":
@@ -201,7 +248,7 @@ class Operator:
 
     # ---- what the page shows -----------------------------------------------------
     def state(self) -> dict:
-        if self._phase in ("waiting", "running", "done", "aborted"):
+        if self._phase in BUSY_PHASES or self._phase in ENDED_PHASES:
             phase, message, view, can_approve = self._phase, self._note, self._frozen, False
         else:
             phase, message, view, can_approve = self._assess()
@@ -216,9 +263,37 @@ class Operator:
             "plan": view,
             "progress": {"done": len(self._results), "total": len(self._steps)},
             "link_up": self._link_up,
+            "verified": self._verified,
         }
 
     # ---- the report --------------------------------------------------------------
+    def facts(self) -> Optional[dict]:
+        """What is known about the run, for report.py. None before anything was approved."""
+        if self._frozen is None:
+            return None
+        if self._phase == "done":
+            status = "completed" if self._verified else "unverified"
+        elif self._phase == "aborted":
+            status = "aborted"
+        else:
+            status = "running"
+        return {
+            "run_id": f"stillhere-run-{self._plan_id}",
+            "status": status,
+            "verified": bool(self._verified),
+            "steps_completed": sum(1 for ok, _ in self._results.values() if ok),
+            "steps_planned": len(self._steps),
+            "obstacles_detected": self._obstacles,
+            "safe_stop_triggered": self._phase == "aborted",
+        }
+
+    def take_finished_facts(self) -> Optional[dict]:
+        """The facts of a run that has just ended, once. The server writes the report file then."""
+        if self._phase in ENDED_PHASES and not self._facts_handed_over:
+            self._facts_handed_over = True
+            return self.facts()
+        return None
+
     def report(self) -> dict:
         if self._frozen is None:
             return {"outcome": "not_run", "survivor_mm": None, "picked": [], "left": [], "note": ""}
@@ -244,10 +319,13 @@ class Operator:
         }
 
     def report_text(self) -> str:
+        """Facts first (report.py), then an allowed summary, then what happened to each block."""
         report = self.report()
         if report["outcome"] == "not_run":
             return "No run has happened yet.\n"
-        lines = [f"Run {report['outcome']}."]
+        built = build_report(self.facts())
+        summary = choose_summary(built) if self._phase in ENDED_PHASES else None
+        lines = [render_report(built, summary), ""]
         if report["note"]:
             lines.append(report["note"][0].upper() + report["note"][1:] + ".")
         if report["survivor_mm"] is not None:

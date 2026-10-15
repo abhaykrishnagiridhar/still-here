@@ -23,9 +23,22 @@ def seen(blocks=WALL, survivor_px=(320, 100)):
     return SimpleNamespace(result=result, survivor=survivor_px, px_per_mm=2.0, scene=scene)
 
 
+class ReportRecorder:
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, facts, path, summary):
+        self.calls.append((facts, path, summary))
+
+
 @pytest.fixture
-def app():
-    return server.create_app(source=None)
+def written():
+    return ReportRecorder()
+
+
+@pytest.fixture
+def app(written):
+    return server.create_app(source=None, report_writer=written)
 
 
 @pytest.fixture
@@ -170,22 +183,57 @@ def test_reset_starts_a_fresh_run(app, client):
 # --- a whole run through the simulated rover -----------------------------------------
 
 
-def test_an_approved_plan_runs_to_the_end_on_the_simulated_rover(app, client):
+def run_the_plan(app, client, until):
+    for _ in range(2000):
+        app.state.advance(0.05)
+        if client.get("/api/state").json()["phase"] == until:
+            return
+    raise AssertionError(f"never reached {until}")
+
+
+def test_an_approved_plan_runs_on_the_simulated_rover_and_waits_for_the_camera(app, client):
     feed(app)
     client.post("/api/approve", json={"key": plan_key(client)}, headers=LOCAL)
 
-    for _ in range(2000):
-        app.state.advance(0.05)
-        if client.get("/api/state").json()["phase"] == "done":
-            break
+    run_the_plan(app, client, "verifying")
 
     state = client.get("/api/state").json()
-    assert state["phase"] == "done"
     assert state["progress"]["done"] == state["progress"]["total"] > 0
+    assert state["verified"] is None
+
+
+def test_a_clear_camera_picture_finishes_the_run_and_the_report_is_written_once(app, client, written):
+    feed(app)
+    client.post("/api/approve", json={"key": plan_key(client)}, headers=LOCAL)
+    run_the_plan(app, client, "verifying")
+
+    for _ in range(3):
+        feed(app, seen([]))
+    app.state.advance(0.05)
+    app.state.advance(0.05)
+
+    state = client.get("/api/state").json()
+    assert state["phase"] == "done" and state["verified"] is True
+    assert len(written.calls) == 1
+    facts, path, summary = written.calls[0]
+    assert facts["status"] == "completed" and facts["steps_completed"] == facts["steps_planned"]
+    assert path.endswith("safe_path_report.json")
+    assert summary == "Run completed and verified."
     report = client.get("/api/report").json()
-    assert report["report"]["outcome"] == "done"
     assert all(item["ok"] for item in report["report"]["picked"])
     assert "moved out of the way" in report["text"]
+    assert "Summary: Run completed and verified." in report["text"]
+
+
+def test_an_aborted_run_writes_a_safe_stop_report(app, client, written):
+    feed(app)
+    client.post("/api/approve", json={"key": plan_key(client)}, headers=LOCAL)
+
+    client.post("/api/abort", headers=LOCAL)
+    app.state.advance(0.05)
+
+    assert [c[0]["status"] for c in written.calls] == ["aborted"]
+    assert written.calls[0][2] == "Run stopped for safety."
 
 
 # --- the camera side ------------------------------------------------------------------

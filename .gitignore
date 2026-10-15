@@ -18,3 +18,4 @@ build*/
 .coverage
 .local-tls/
 .ruff_cache/
+safe_path_report.json

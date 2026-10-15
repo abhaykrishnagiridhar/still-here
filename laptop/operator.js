@@ -6,6 +6,7 @@
   const video = $("video");
   const mark = $("tap-mark");
   const statusLine = $("status");
+  const headline = $("headline");
   const approve = $("approve");
   const stop = $("stop");
   const again = $("again");
@@ -18,7 +19,18 @@
   const reportText = $("report-text");
 
   const WARN_PHASES = ["blocked", "aborted", "need_survivor"];
-  const BUSY_PHASES = ["waiting", "running"];
+  const BUSY_PHASES = ["waiting", "running", "verifying"];
+  const HEADLINES = {
+    scanning: "Looking at the scene.",
+    need_survivor: "Find the survivor.",
+    plan_ready: "Check the plan, then approve it.",
+    blocked: "There is no safe way through.",
+    clear: "The way is already clear.",
+    waiting: "Waiting for the rover.",
+    running: "The rover is clearing the way.",
+    verifying: "Checking the result.",
+    aborted: "The run was stopped.",
+  };
   const END_PHASES = ["done", "aborted"];
 
   let current = null;
@@ -62,8 +74,11 @@
 
   function render(state) {
     current = state;
-    const warn = WARN_PHASES.includes(state.phase) || !state.link_up || state.camera_error;
-    setStatus(state.camera_error || state.message, state.phase === "done" ? "ok" : (warn ? "warn" : ""));
+    const warn = WARN_PHASES.includes(state.phase) || !state.link_up || state.camera_error || state.verified === false;
+    setStatus(state.camera_error || state.message, state.verified === true ? "ok" : (warn ? "warn" : ""));
+    headline.textContent = state.phase === "done"
+      ? (state.verified ? "The way is clear." : "The rover finished, but it is not confirmed.")
+      : (HEADLINES[state.phase] || HEADLINES.scanning);
 
     const plan = state.plan;
     fill(steps, plan ? plan.order : [], "No blocks need to move yet.", (p) =>

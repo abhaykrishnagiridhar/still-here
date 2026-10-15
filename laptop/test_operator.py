@@ -221,7 +221,12 @@ def test_new_pictures_do_not_change_the_plan_once_it_is_approved():
 # --- running and finishing ------------------------------------------------------------
 
 
-def run_to_the_end(operator, link, steps_ok=True):
+def clear_picture():
+    """The camera sees the way to the survivor open: nothing left to remove."""
+    return seen([])
+
+
+def run_to_the_end(operator, link, steps_ok=True, clear=True):
     operator.approve(key_of(operator))
     plan_id = link.sent[0]["plan_id"]
     operator.on_rover([{"type": "state", "plan_id": plan_id}])
@@ -231,6 +236,9 @@ def run_to_the_end(operator, link, steps_ok=True):
               "reason": "" if steps_ok else "unreachable"}]
         )
     operator.on_rover([{"type": "event", "code": "plan_finished", "detail": ""}])
+    if clear:
+        for _ in range(3):
+            operator.observe(clear_picture())
 
 
 def test_progress_counts_the_steps_that_are_done():
@@ -244,12 +252,67 @@ def test_progress_counts_the_steps_that_are_done():
     assert operator.state()["progress"] == {"done": 1, "total": len(link.sent[0]["steps"])}
 
 
-def test_finishing_the_plan_ends_in_done():
+def test_finishing_the_plan_ends_in_done_once_the_camera_confirms_it():
     operator, link, _ = make()
 
     run_to_the_end(operator, link)
 
-    assert operator.state()["phase"] == "done"
+    state = operator.state()
+    assert state["phase"] == "done"
+    assert state["verified"] is True
+    assert "clear" in state["message"].lower()
+
+
+def test_when_the_rover_finishes_the_camera_is_asked_to_confirm():
+    operator, link, _ = make()
+
+    run_to_the_end(operator, link, clear=False)
+
+    state = operator.state()
+    assert state["phase"] == "verifying"
+    assert state["verified"] is None
+
+
+def test_one_clear_picture_is_not_enough_to_confirm():
+    operator, link, _ = make()
+    run_to_the_end(operator, link, clear=False)
+
+    operator.observe(clear_picture())
+
+    assert operator.state()["phase"] == "verifying"
+
+
+def test_a_picture_that_still_shows_blocks_in_the_way_does_not_confirm():
+    operator, link, _ = make()
+    run_to_the_end(operator, link, clear=False)
+
+    for _ in range(5):
+        operator.observe(seen(WALL))  # the same wall as before
+
+    assert operator.state()["phase"] == "verifying"
+
+
+def test_a_run_the_camera_cannot_confirm_ends_unverified_after_the_timeout():
+    operator, link, clock = make()
+    run_to_the_end(operator, link, clear=False)
+
+    clock.now += 30
+    operator.tick()
+
+    state = operator.state()
+    assert state["phase"] == "done"
+    assert state["verified"] is False
+    assert "still sees" in state["message"].lower()
+
+
+def test_a_picture_with_no_survivor_does_not_confirm():
+    operator, link, _ = make()
+    run_to_the_end(operator, link, clear=False)
+
+    for _ in range(5):
+        operator.observe(seen([], survivor_mm=None, survivor_px=None))
+
+    assert operator.state()["phase"] == "verifying"
 
 
 def test_abort_tells_the_rover_to_stop_and_ends_the_run():
@@ -325,3 +388,104 @@ def test_a_report_before_any_run_says_nothing_has_run():
 
     assert operator.report()["outcome"] == "not_run"
     assert "no run" in operator.report_text().lower()
+
+
+# --- the facts behind the report --------------------------------------------------------
+
+
+def test_the_facts_of_a_verified_run():
+    operator, link, _ = make()
+    run_to_the_end(operator, link)
+
+    facts = operator.facts()
+
+    planned = len(link.sent[0]["steps"])
+    assert facts == {
+        "run_id": f"stillhere-run-{link.sent[0]['plan_id']}",
+        "status": "completed",
+        "verified": True,
+        "steps_completed": planned,
+        "steps_planned": planned,
+        "obstacles_detected": 0,
+        "safe_stop_triggered": False,
+    }
+
+
+def test_steps_the_rover_reported_as_failed_are_not_counted_as_completed():
+    operator, link, clock = make()
+    run_to_the_end(operator, link, steps_ok=False, clear=False)
+    clock.now += 30
+    operator.tick()
+
+    facts = operator.facts()
+
+    assert facts["steps_completed"] == 0
+    assert facts["status"] == "unverified"
+    assert facts["verified"] is False
+
+
+def test_an_aborted_run_is_a_safe_stop():
+    operator, link, _ = make()
+    operator.approve(key_of(operator))
+
+    operator.abort()
+
+    facts = operator.facts()
+    assert facts["status"] == "aborted"
+    assert facts["safe_stop_triggered"] is True
+    assert facts["verified"] is False
+
+
+def test_each_new_ir_obstacle_trip_is_counted_once():
+    operator, link, _ = make()
+    operator.approve(key_of(operator))
+    trip = {"type": "sensors", "ir_obstacle": {"left": True, "right": False}}
+    clear = {"type": "sensors", "ir_obstacle": {"left": False, "right": False}}
+
+    operator.on_rover([trip, trip, clear, trip, clear])
+
+    assert operator.facts()["obstacles_detected"] == 2
+
+
+def test_the_finished_facts_are_handed_over_once():
+    operator, link, _ = make()
+    assert operator.take_finished_facts() is None
+    run_to_the_end(operator, link)
+
+    first = operator.take_finished_facts()
+
+    assert first["status"] == "completed"
+    assert operator.take_finished_facts() is None
+
+
+def test_an_aborted_run_also_hands_over_its_facts_once():
+    operator, link, _ = make()
+    operator.approve(key_of(operator))
+    operator.abort()
+
+    assert operator.take_finished_facts()["status"] == "aborted"
+    assert operator.take_finished_facts() is None
+
+
+def test_the_text_report_is_facts_first_with_an_allowed_summary_and_the_block_lines():
+    operator, link, _ = make()
+    run_to_the_end(operator, link)
+
+    lines = operator.report_text().splitlines()
+
+    assert lines[0] == "STILL HERE - SAFE-PATH REPORT"
+    assert "Verified: True" in lines
+    assert "Summary: Run completed and verified." in lines
+    assert any(line.startswith("block_") and "moved out of the way" in line for line in lines)
+
+
+def test_an_unverified_run_is_reported_as_not_verified():
+    operator, link, clock = make()
+    run_to_the_end(operator, link, clear=False)
+    clock.now += 30
+    operator.tick()
+
+    text = operator.report_text()
+
+    assert "Summary: Run was not verified." in text
+    assert "completed and verified" not in text
