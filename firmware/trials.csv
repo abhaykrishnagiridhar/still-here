@@ -1,0 +1,2 @@
+timestamp,position_error_mm,angle_error_deg,position_pass,angle_pass,overall_pass
+2026-10-15T12:28:58,3.606,6,True,True,True
