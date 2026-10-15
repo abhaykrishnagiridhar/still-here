@@ -115,6 +115,8 @@ still-here/
     test_vision_pipeline.py  Whole camera pipeline on made-up pictures
     gyro_map.py              Phone tilt to drive and arm messages
     sim_rover.py             Software rover: same messages as the protocol, no hardware
+    test_gyro_map.py         Tests for the phone tilt mapping
+    test_sim_rover.py        Tests for the software rover
     vision.py                Colour-blob vision demo (ported from the C++ prototype) feeding the planner
     test_vision.py           Tests for the vision demo on synthetic pictures
     server.py *              FastAPI and WebSocket link to the rover, serves the UI
@@ -126,8 +128,9 @@ still-here/
     pins.h                   Pin map, every pin -1 until the hardware design is read
     platformio.ini           ESP32-S3 N16R8 build settings, flat layout
     secrets.example.h        Wi-Fi template for the 2.4 GHz phone hotspot
-    cam_boot.cpp             Placeholder for the ESP32-CAM board (video only)
     rover_sketch.txt         Earlier all-in-one rover sketch, reference only, not built
+    cam_probe.txt            Camera sensor probe for the S3 board, paste into the Arduino IDE
+    cam_scan.txt             Full camera pin scan, for when the probe finds no known map
     link.cpp *               Camera stream and WebSocket server, link-loss handling
     arm.cpp *                PCA9685 servo driver, pick and drop, stored plan
     drive.cpp *              L298N wheels, manual and auto modes, IR stop

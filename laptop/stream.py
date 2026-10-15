@@ -1,6 +1,6 @@
 """A frame source that reconnects by itself when a network camera drops out.
 
-The ESP32-CAM stream over Wi-Fi stalls now and then. This reads pictures, puts up with a few
+The rover camera's stream over Wi-Fi stalls now and then. This reads pictures, puts up with a few
 failed reads in a row, then closes the stream and opens it again. After too many failed
 reconnects in a row it gives up, so the program can say so instead of hanging.
 """

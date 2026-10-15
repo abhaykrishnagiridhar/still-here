@@ -3,7 +3,7 @@
 Usage:
     python vision.py                                webcam 0
     python vision.py 1                              webcam 1
-    python vision.py http://192.168.0.50/stream     the ESP32-CAM stream
+    python vision.py http://192.168.0.50/stream     the rover's camera stream
     python vision.py 0 --masks                      also show what the colour detectors see
 
 Press ESC in the video window to quit.
@@ -369,7 +369,7 @@ def draw_overlay(
 
 
 def open_source(source: str) -> cv2.VideoCapture:
-    """A webcam index such as "0", or a stream URL such as the ESP32-CAM's /stream."""
+    """A webcam index such as "0", or a stream URL such as the rover camera's /stream."""
     if source.isdigit():
         index = int(source)
         if sys.platform == "win32":
