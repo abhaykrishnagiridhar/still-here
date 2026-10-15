@@ -32,10 +32,10 @@ The link is one-way. Nothing goes back to the phone except the WebSocket staying
 
 | File | Lines | Role |
 |---|---|---|
-| `simulation/phone_control.html` | 127 | The phone page. Reads tilt sensors, shows Drive/Arm mode, an elbow slider, a gripper button, Centre tilt and STOP. |
-| `simulation/phone_bridge.py` | 86 | FastAPI app. Serves the page, a health check, and the WebSocket. Turns samples into messages and forwards them over UDP. |
+| `simulation/phone_control.html` | 170 | The phone page. Reads tilt sensors, has Drive and Arm tabs, an elbow slider and gripper button (shown only in Arm mode), Centre tilt and STOP. |
+| `simulation/phone_bridge.py` | 100 | FastAPI app. Serves the page, a health check, and the WebSocket. Turns samples into messages and forwards them over UDP. |
 | `simulation/blender_rover.py` | 225 | Runs inside Blender. Builds the scene, listens on UDP, steps `SimRover`, moves the 3D objects. |
-| `simulation/test_phone_bridge.py` | 81 | 18 tests for the bridge (messages, origin rule, page, WebSocket). |
+| `simulation/test_phone_bridge.py` | 115 | 20 tests for the bridge (messages, mode-change stop, stale-phone stop, the page's structure, origin rule, WebSocket). |
 | `laptop/gyro_map.py` | 113 | Pure logic: tilt angles to `drive` and `arm_pose` messages. No network, no clock. |
 | `laptop/sim_rover.py` | 418 | The software rover: protocol handler, wheel and arm motion, plan runner, sensors. Pure logic with an explicit clock. |
 | `laptop/origin_guard.py` | 25 | `origin_allowed(origin)`: which web pages may use the WebSocket. |
@@ -57,7 +57,7 @@ The link is one-way. Nothing goes back to the phone except the WebSocket staying
 `phone_control.html` is a single self-contained file (inline CSS and JavaScript, no libraries).
 
 - **Enable phone controls** asks for motion permission where the browser needs it (iOS), opens `ws(s)://<host>/phone`, and starts sending.
-- **Sensor source:** it uses `deviceorientation` (beta, gamma). If that event does not arrive for a second it falls back to `devicemotion`, computing pitch and roll from gravity. The page shows which source is active and shows "No tilt samples" after 1.5 s of silence.
+- **Sensor source:** it uses `deviceorientation` (beta, gamma). If that event does not arrive for a second it falls back to `devicemotion`, computing pitch and roll from gravity. The page shows which source is active and shows "No tilt samples" after 1.5 s of silence (its hint no longer mentions the Android flag in section 7).
 - **Sample sent to the server** (JSON text, one per sensor event, and again whenever the slider or button changes):
 
 ```json
@@ -66,7 +66,8 @@ The link is one-way. Nothing goes back to the phone except the WebSocket staying
 
   Optional fields: `"calibrate": true` (use the current hold as the centre; sent on the first sample, when the sensor source changes, when the mode changes, and when Centre tilt is pressed) and `"stop": true` (STOP ROVER pressed).
 - **Safety on the page:** STOP ROVER sends a stop and disables the page. Hiding the page (switching apps, locking the screen) also stops. Closing the WebSocket shows "rover stopped".
-- **Mode, elbow and gripper** come from the screen, not from tilt: Drive/Arm buttons, an elbow slider from -135 to 135 degrees, and an open/closed gripper toggle.
+- **Mode, elbow and gripper** come from the screen, not from tilt: Drive and Arm tabs, an elbow slider from -135 to 135 degrees, and an open/closed gripper toggle. The elbow slider and gripper button sit in a panel that is hidden in Drive mode and shown in Arm mode. **Centre tilt** is disabled until the page is connected.
+- **Look:** a light, flat "field instrument" theme with large touch targets, safe-area padding for phone notches and a reduced-motion setting. It is one self-contained file. Its stylesheet still contains an older dark theme that the light theme overrides.
 
 ## 6. Tilt to command: `laptop/gyro_map.py`
 
@@ -81,7 +82,7 @@ Constants: full output at a 30 degree tilt (`TILT_FULL_DEG`), 4 degree dead zone
 - A `stop` sample returns one zero-speed `drive` message.
 - A mode change returns two messages: a zero-speed `drive`, then the first message of the new mode (see the limitations in section 10).
 - A sample whose `beta` or `gamma` is missing or not a number returns `[]`. An unknown `mode` keeps the current one.
-- `idle(now)` returns one zero-speed drive message when no sample has arrived for 0.5 s, then stays quiet until the next sample. The bridge does not call it (section 10).
+- `idle(now)` returns one zero-speed drive message when no sample has arrived for 0.5 s, then stays quiet until the next sample. The bridge calls it (section 7).
 
 The messages match `docs/protocol.md` (`drive`: `left`, `right` in -1..1; `arm_pose`: `base`, `shoulder`, `elbow`, `gripper` in degrees, `speed` 0..1).
 
@@ -99,7 +100,8 @@ laptop/.venv/Scripts/python -m uvicorn simulation.phone_bridge:app --host 0.0.0.
 | `GET /health` | `{"ok": true, "blender_udp": "127.0.0.1:8766"}`. |
 | `WS /phone` | One `PhoneBridge` (and so one `GyroSession`) per connection. Each text frame is parsed as JSON (invalid JSON is skipped), passed through the session, and the result is sent to Blender. |
 
-- **What is forwarded:** `PhoneBridge.handle` returns `{"kind": "command", "message": commands[-1]}`, only the last message of a sample, or `None` if the sample produced nothing. It is sent as one UDP datagram to `127.0.0.1:8766`.
+- **What is forwarded:** `PhoneBridge.handle_all` returns one `{"kind": "command", "message": ...}` packet for every message the session produced, so a mode change keeps its zero-speed `drive` before the first arm command. Each packet is sent as its own UDP datagram to `127.0.0.1:8766`. `PhoneBridge.handle` is kept for older callers and returns only the final packet, or `None`.
+- **Phone gone quiet:** the WebSocket loop waits at most 0.1 s for a sample. On each timeout it calls `PhoneBridge.idle`, which sends one zero-speed `drive` once the phone has been silent for 0.5 s and then stays quiet until the next sample.
 - **On disconnect** the bridge sends one zero-speed `drive` command to Blender.
 - **Origin rule** (`origin_allowed`): the WebSocket is refused with close code 1008 unless the `Origin` header is missing (scripts) or its host is `localhost`, a loopback address, a private LAN address or a link-local address. This stops a web page on the public internet from driving the rover through a visitor's browser. It is not authentication: any device on the same network that sends no `Origin` header, or a local one, can connect.
 - **Plain http on purpose.** Browsers treat plain-http pages as insecure, which limits motion sensors: on Chrome for Android the flag `chrome://flags/#unsafely-treat-insecure-origin-as-secure` must be set to the page's address; iOS Safari requires a secure page for motion permission, so an iPhone is not expected to work over http. There is no HTTPS or certificate setup in the repository any more.
@@ -138,22 +140,20 @@ At start it clears the scene, builds the objects below, binds UDP `127.0.0.1:876
 
 ## 10. Known limitations (verified in this repository)
 
-1. **A mode switch drops the stop.** The session returns a stop and then the new command, but the bridge forwards only the last one. Switching from Drive to Arm while moving leaves the wheels running at the last drive speed, because `arm_pose` does not change the wheels. The code comment in `phone_bridge.py` that says Blender can apply both is therefore wrong. Fix: forward every message, or send a zero-speed `drive` first.
-2. **The link-loss safety is not active.** The bridge never sends `ping`, so the twin's `SimRover` reports `link_lost` about 2 s after Blender starts and stays in that state. Driving still works, but after that first trip the "stop the wheels after 2 s of silence" rule never fires again.
-3. **A phone that stays connected but goes quiet is not stopped.** `GyroSession.idle()` is never called. Only a disconnect, the STOP button, or hiding the page stops the wheels. A wrapper around the WebSocket that calls `idle()` on a timer would fix this.
-4. **No feedback to the phone.** Blender never reports state, so the page cannot show where the rover is.
-5. **Block layers are ignored by the physics.** Blocks 1 and 2 share the same x, y and both sit 20 mm up, so the stack overlaps instead of stacking. `layer` is only data for the planner.
-6. **Blender dimensions are approximate.** The wheels sit 105 mm either side of the body centre but the motion model uses a 140 mm wheel base, and the arm and body sizes are rough.
-7. **Blender is not covered by automated tests**, because `bpy` cannot be imported in the test environment. The tilt mapping, the rover model and the bridge are.
-8. **The bridge is not authenticated.** Run it only on a network you trust.
-9. **Assumed numbers:** every geometry, speed and servo value in section 8 is an assumption until the real rover is measured.
+1. **The link-loss safety in the rover model is not active.** The bridge never sends `ping`, so the twin's `SimRover` reports `link_lost` about 2 s after Blender starts and stays in that state. Driving still works, but after that first trip the rover model's own "stop the wheels after 2 s of silence" rule never fires again. The bridge's own stale-phone stop (section 7) covers the phone going quiet, so this only matters if the bridge itself dies.
+2. **No feedback to the phone.** Blender never reports state, so the page cannot show where the rover is.
+3. **Block layers are ignored by the physics.** Blocks 1 and 2 share the same x, y and both sit 20 mm up, so the stack overlaps instead of stacking. `layer` is only data for the planner.
+4. **Blender dimensions are approximate.** The wheels sit 105 mm either side of the body centre but the motion model uses a 140 mm wheel base, and the arm and body sizes are rough.
+5. **Blender is not covered by automated tests**, because `bpy` cannot be imported in the test environment. The tilt mapping, the rover model and the bridge are.
+6. **The bridge is not authenticated.** Run it only on a network you trust.
+7. **Assumed numbers:** every geometry, speed and servo value in section 8 is an assumption until the real rover is measured.
 
 ## 11. Running and testing
 
 - **Install:** the project virtual environment (`laptop/.venv`, Python 3.13) already has FastAPI and uvicorn. Tests also need the `dev` extra (`pytest`, `pytest-cov`, `httpx2`).
 - **Run order:** start Blender with the script, then start the bridge, then open `http://<laptop-ip>:8765/` on the phone (same Wi-Fi), press Enable phone controls and hold the phone still so it centres.
-- **Tests:** from the `simulation/` folder, `../laptop/.venv/Scripts/python -m pytest -q` runs the 18 bridge tests. From `laptop/`, `.venv/Scripts/python -m pytest -q test_gyro_map.py test_sim_rover.py` runs the logic tests. From the repository root, `pytest` runs everything.
-- **Bridge tests cover:** a held tilt giving full-speed drive, the arm message shape, bad input, the origin rule for allowed and refused pages, a refused and an accepted WebSocket, and the page being served over http.
+- **Tests:** from the `simulation/` folder, `../laptop/.venv/Scripts/python -m pytest -q` runs the 20 bridge tests. From `laptop/`, `.venv/Scripts/python -m pytest -q test_gyro_map.py test_sim_rover.py` runs the logic tests. From the repository root, `pytest` runs everything.
+- **Bridge tests cover:** the page's structure (arm controls hidden in Drive mode, tabs, safe-area and reduced-motion rules), a smoothed drive command after calibration, the arm message shape, bad input, the stop kept before the arm command on a mode change, the single stop after the phone goes stale, the origin rule for allowed and refused pages, a refused and an accepted WebSocket, and the page being served over http.
 
 ## 12. Where to change things
 

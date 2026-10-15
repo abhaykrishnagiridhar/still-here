@@ -1,14 +1,12 @@
 """Receives phone orientation and forwards rover-protocol commands to Blender over localhost UDP.
 
-Run from the repo root (``still-here``) with the laptop virtual environment:
-    laptop/.venv/Scripts/python -m uvicorn simulation.phone_bridge:app --host 0.0.0.0 --port 8765
-Then open http://<laptop-ip>:8765/ on the phone. Plain http is used on purpose, so the page
-is not a "secure context": on Chrome for Android set chrome://flags/#unsafely-treat-insecure-origin-as-secure
-to that address, or the browser will not give the page tilt readings.
+Run from ``still-here`` after installing the existing project dependencies:
+    python -m uvicorn simulation.phone_bridge:app --host 0.0.0.0 --port 8765
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import socket
 import time
@@ -28,8 +26,7 @@ from origin_guard import origin_allowed
 
 BLENDER_HOST = "127.0.0.1"
 BLENDER_PORT = 8766
-PHONE_PAGE = Path(__file__).resolve().parent / "phone_control.html"
-WS_POLICY_VIOLATION = 1008
+WS_POLICY_VIOLATION = 1008  # close code: the page is not allowed to drive the rover
 
 
 class PhoneBridge:
@@ -38,21 +35,26 @@ class PhoneBridge:
     def __init__(self) -> None:
         self.session = GyroSession()
 
-    def handle(self, sample: dict, now: float) -> dict | None:
+    def handle_all(self, sample: dict, now: float) -> list[dict]:
+        """Convert one browser sample into every command it entails.
+
+        A mode change includes a safe drive stop before the first arm command;
+        emitting the whole list preserves that safety contract over UDP.
+        """
         commands = self.session.update(sample, now)
-        if not commands:
-            return None
-        # Mode changes intentionally emit a stop then the new command. Blender can apply both in order.
-        return {"kind": "command", "message": commands[-1]}
+        return [{"kind": "command", "message": command} for command in commands]
+
+    def handle(self, sample: dict, now: float) -> dict | None:
+        """Compatibility helper for callers that expect only the final command."""
+        packets = self.handle_all(sample, now)
+        return packets[-1] if packets else None
+
+    def idle(self, now: float) -> list[dict]:
+        """Return the one safe-stop packet when phone samples go stale."""
+        return [{"kind": "command", "message": command} for command in self.session.idle(now)]
 
 
 app = FastAPI(title="STILL HERE phone-to-Blender bridge")
-
-
-@app.get("/")
-def phone_page() -> FileResponse:
-    """The tilt controller. Open http://<laptop-ip>:8765/ on the phone, on the same Wi-Fi."""
-    return FileResponse(PHONE_PAGE)
 
 
 @app.get("/health")
@@ -60,8 +62,16 @@ def health() -> dict:
     return {"ok": True, "blender_udp": f"{BLENDER_HOST}:{BLENDER_PORT}"}
 
 
+@app.get("/")
+def phone_control() -> FileResponse:
+    """Serve the mobile controller from the same origin as its WebSocket."""
+    return FileResponse(Path(__file__).with_name("phone_control.html"))
+
+
 @app.websocket("/phone")
 async def phone_socket(websocket: WebSocket) -> None:
+    # Only pages from this machine or the local network may drive the rover, so a web page on the
+    # public internet cannot open this socket through a visitor's browser (see origin_guard.py).
     if not origin_allowed(websocket.headers.get("origin")):
         await websocket.close(code=WS_POLICY_VIOLATION)
         return
@@ -70,13 +80,17 @@ async def phone_socket(websocket: WebSocket) -> None:
     udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         while True:
-            incoming = await websocket.receive_text()
+            try:
+                incoming = await asyncio.wait_for(websocket.receive_text(), timeout=0.1)
+            except TimeoutError:
+                for packet in bridge.idle(time.monotonic()):
+                    udp.sendto(json.dumps(packet).encode("utf-8"), (BLENDER_HOST, BLENDER_PORT))
+                continue
             try:
                 sample = json.loads(incoming)
             except json.JSONDecodeError:
                 continue
-            packet = bridge.handle(sample, time.monotonic())
-            if packet is not None:
+            for packet in bridge.handle_all(sample, time.monotonic()):
                 udp.sendto(json.dumps(packet).encode("utf-8"), (BLENDER_HOST, BLENDER_PORT))
     except WebSocketDisconnect:
         # Blender receives an explicit safe stop when the phone page goes away.

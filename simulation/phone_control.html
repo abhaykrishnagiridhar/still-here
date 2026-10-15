@@ -3,39 +3,127 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>STILL HERE — rover control</title>
+  <meta name="theme-color" content="#091317">
+  <meta name="description" content="STILL HERE phone controller for rover driving and arm positioning.">
+  <title>STILL HERE | Rover control</title>
   <style>
-    :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #0d1117; color: #f5f7fa; }
-    body { max-width: 36rem; margin: 0 auto; padding: 1.25rem; }
-    h1 { font-size: 1.4rem; margin: 0 0 .25rem; } p { color: #b6c2cf; }
-    .card { background: #171e27; border: 1px solid #344253; border-radius: .8rem; padding: 1rem; margin: 1rem 0; }
-    button, input { font: inherit; } button { min-height: 3.1rem; padding: .75rem 1rem; border: 0; border-radius: .55rem; font-weight: 700; }
-    #enable { width: 100%; background: #67e8a5; color: #082114; } #stop { width: 100%; background: #ef6b73; color: #2b060a; }
-    .modes { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; margin: .8rem 0; }
-    .modes button { background: #263241; color: #f5f7fa; } .modes button.active { outline: 3px solid #67e8a5; }
-    label { display: block; font-weight: 700; margin-top: .9rem; } input { width: 100%; margin-top: .5rem; accent-color: #67e8a5; }
-    .status { font-variant-numeric: tabular-nums; } .good { color: #67e8a5; } .bad { color: #ff9b9b; }
+    :root { color-scheme: dark; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #091317; color: #f2f8f6; --surface: #102126; --surface-raised: #162c32; --line: #29434b; --muted: #a7bec0; --accent: #22d8bf; --danger: #ff6d82; --radius: 18px; }
+    * { box-sizing: border-box; }
+    html { min-height: 100%; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+    body { min-height: 100dvh; max-width: 34rem; margin: 0 auto; padding: max(1rem, env(safe-area-inset-top)) 1rem calc(1rem + env(safe-area-inset-bottom)); background: linear-gradient(180deg, #0d2025 0, #091317 38rem); }
+    button, input { font: inherit; }
+    button { min-height: 3.25rem; border: 1px solid transparent; border-radius: 12px; padding: .75rem 1rem; color: inherit; font-weight: 750; letter-spacing: .01em; touch-action: manipulation; transition-property: transform, background-color, border-color, box-shadow, color; transition-duration: 160ms; transition-timing-function: cubic-bezier(.2, .8, .2, 1); }
+    button:focus-visible, input:focus-visible { outline: 3px solid #d2fff8; outline-offset: 3px; }
+    button:active:not(:disabled) { transform: scale(.98); }
+    button:disabled { cursor: not-allowed; opacity: .52; }
+    .app-shell { display: grid; gap: 1rem; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    .brand { display: inline-flex; align-items: center; gap: .75rem; width: fit-content; color: #f7fffd; text-decoration: none; }
+    .brand-mark { position: relative; display: grid; width: 2.65rem; height: 2.65rem; place-items: center; overflow: hidden; border: 1px solid #3d6970; border-radius: 11px; background: #0a2d31; box-shadow: inset 0 1px 0 rgb(255 255 255 / .12); }
+    .brand-mark::before, .brand-mark::after { position: absolute; content: ""; border: 2px solid var(--accent); border-radius: 50%; }
+    .brand-mark::before { width: 1.05rem; height: 1.05rem; }
+    .brand-mark::after { width: 1.58rem; height: 1.58rem; opacity: .6; }
+    .brand-mark span { position: relative; z-index: 1; width: .34rem; height: .34rem; border-radius: 50%; background: #f6fffd; }
+    .brand-copy { display: grid; gap: .08rem; }
+    .brand-name { font-size: 1rem; font-weight: 850; letter-spacing: .13em; line-height: 1; }
+    .brand-subtitle { color: var(--muted); font-size: .68rem; font-weight: 700; letter-spacing: .12em; line-height: 1.2; text-transform: uppercase; }
+    .intro { margin: .1rem 0 0; color: var(--muted); font-size: .96rem; line-height: 1.42; text-wrap: pretty; }
+    .panel { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: 0 14px 35px rgb(0 0 0 / .16), inset 0 1px 0 rgb(255 255 255 / .035); }
+    .connection-panel { padding: 1rem; }
+    .primary { width: 100%; color: #04211d; background: var(--accent); box-shadow: 0 5px 13px rgb(34 216 191 / .19); }
+    .primary:hover { background: #4cebd5; }
+    .status-group { display: grid; gap: .45rem; margin-top: .9rem; }
+    .status { margin: 0; font-size: .91rem; font-variant-numeric: tabular-nums; line-height: 1.35; text-wrap: pretty; }
+    .status.good { color: #8cf4e5; } .status.bad { color: #ffadbb; } .status.neutral { color: var(--muted); }
+    .secondary { width: 100%; margin-top: 1rem; border-color: #42616a; background: transparent; color: #dcf9f4; }
+    .secondary:hover:not(:disabled) { border-color: #71a9af; background: rgb(113 169 175 / .1); }
+    .control-panel { overflow: hidden; }
+    .mode-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: .35rem; margin: .65rem; padding: .3rem; border: 1px solid #28434a; border-radius: 14px; background: #0b191d; }
+    .mode-tabs button { min-height: 3.05rem; border-color: transparent; background: transparent; color: var(--muted); }
+    .mode-tabs button[aria-selected="true"] { border-color: #36727a; background: var(--surface-raised); color: #f4fffd; box-shadow: 0 3px 10px rgb(0 0 0 / .18); }
+    .mode-summary { margin: 0; padding: .2rem 1rem 1rem; color: var(--muted); font-size: .9rem; line-height: 1.4; }
+    .mode-summary strong { color: var(--accent); font-weight: 800; }
+    #arm-controls { display: grid; gap: .8rem; padding: 0 1rem 1rem; border-top: 1px solid var(--line); }
+    #arm-controls[hidden] { display: none !important; }
+    .control-label { display: flex; justify-content: space-between; gap: 1rem; margin-top: .85rem; color: #ebf7f5; font-size: .94rem; font-weight: 760; }
+    output { color: var(--accent); font-variant-numeric: tabular-nums; }
+    input[type="range"] { width: 100%; min-height: 2.7rem; margin: 0; accent-color: var(--accent); touch-action: pan-x; }
+    .grip-button { border-color: #42616a; background: #173137; color: #eafff9; }
+    .grip-button[data-open="false"] { border-color: #90606b; background: #321d25; color: #ffdce2; }
+    .emergency-wrap { position: sticky; bottom: 0; padding-top: .1rem; padding-bottom: .15rem; background: linear-gradient(180deg, transparent, #091317 40%); }
+    .emergency { width: 100%; border-color: #ff9eae; background: var(--danger); color: #300711; box-shadow: 0 8px 20px rgb(255 109 130 / .18); }
+    .emergency:hover { background: #ff8da0; }
+    @media (min-width: 42rem) { body { padding-top: 1.5rem; } .app-shell { gap: 1.15rem; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; } }
+
+    /* Field-instrument theme: intentionally flat, quiet, and easy to read outdoors. */
+    :root { color-scheme: light; background: #e6e8e5; color: #1b292d; --surface: transparent; --surface-raised: #203b46; --line: #aab5b5; --muted: #59696d; --accent: #2f6196; --danger: #bd413d; --radius: 6px; }
+    body { max-width: 33rem; padding: max(1rem, env(safe-area-inset-top)) 1.1rem calc(1rem + env(safe-area-inset-bottom)); background: #e6e8e5; }
+    .app-shell { gap: 0; border-top: 5px solid #1b292d; }
+    header { padding: 1.25rem 0 1.1rem; border-bottom: 1px solid var(--line); }
+    .brand { gap: .8rem; color: #1b292d; }
+    .brand-index { display: grid; width: 3.1rem; height: 3.1rem; place-items: center; border-radius: 0; background: #1b292d; color: #ffffff; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .82rem; font-weight: 800; letter-spacing: .08em; }
+    .brand-name { font-size: 1.85rem; font-weight: 850; letter-spacing: -.075em; line-height: .78; text-transform: lowercase; }
+    .brand-subtitle { margin-top: .45rem; color: #59696d; font-size: .68rem; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
+    .intro { max-width: 31rem; margin: 1.05rem 0 0; color: #3e5055; font-size: 1rem; line-height: 1.45; }
+    .panel { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+    .connection-panel { padding: 1.15rem 0; border-bottom: 1px solid var(--line); }
+    .primary { min-height: 3.5rem; border-radius: var(--radius); color: #ffffff; background: var(--accent); box-shadow: none; }
+    .primary:hover { background: #204d7c; }
+    .status-group { gap: .35rem; margin-top: .85rem; }
+    .status { color: #405155; font-size: .9rem; }
+    .status.good { color: #245950; } .status.bad { color: #9d3735; } .status.neutral { color: #59696d; }
+    .secondary { width: auto; min-height: 2.75rem; margin-top: .85rem; border-radius: var(--radius); border-color: #69797c; color: #1b292d; }
+    .secondary:hover:not(:disabled) { border-color: #1b292d; background: #d8ddda; }
+    .control-panel { border-bottom: 1px solid var(--line); }
+    .mode-tabs { gap: 0; margin: 1.1rem 0 0; padding: 0; border: 1px solid #6f7d80; border-radius: var(--radius); background: transparent; }
+    .mode-tabs button { min-height: 3.15rem; border-radius: 0; color: #3e5055; }
+    .mode-tabs button + button { border-left: 1px solid #6f7d80; }
+    .mode-tabs button[aria-selected="true"] { border-color: transparent; background: #203b46; color: #ffffff; box-shadow: none; }
+    .mode-summary { padding: .95rem 0 1.1rem; color: #526266; font-size: .94rem; }
+    .mode-summary strong { color: #1b292d; }
+    #arm-controls { gap: .7rem; padding: .15rem 0 1.15rem; border-top: 1px solid var(--line); }
+    #arm-controls .mode-summary { padding-top: .95rem; }
+    .control-label { margin-top: .35rem; color: #1b292d; }
+    output { color: #2f6196; }
+    input[type="range"] { accent-color: #2f6196; }
+    .grip-button { border-radius: var(--radius); border-color: #6f7d80; background: transparent; color: #1b292d; }
+    .grip-button[data-open="false"] { border-color: #9f5c58; background: #f0dedd; color: #702421; }
+    .emergency-wrap { padding: 1.15rem 0 .15rem; background: #e6e8e5; }
+    .emergency { min-height: 3.6rem; border-radius: var(--radius); border-color: #9c302d; background: var(--danger); color: #ffffff; box-shadow: none; }
+    .emergency:hover { background: #a73430; }
   </style>
 </head>
 <body>
-  <h1>Rover control</h1>
-  <p>Hold the phone flat, screen up. Tilt forward to drive forward; tilt left/right to steer.</p>
-  <section class="card">
-    <button id="enable" type="button">Enable phone controls</button>
-    <p id="status" class="status bad" role="status">Not connected</p>
-    <p id="motion-status" class="status" role="status">Waiting for phone motion</p>
-    <button id="calibrate" type="button">Centre tilt</button>
-  </section>
-  <section class="card">
-    <div class="modes" aria-label="Control mode">
-      <button id="drive" class="active" type="button">Drive</button>
-      <button id="arm" type="button">Arm</button>
-    </div>
-    <label for="elbow">Elbow <output id="elbow-value">−90°</output></label>
-    <input id="elbow" type="range" min="-135" max="135" value="-90">
-    <button id="grip" type="button">Gripper: open</button>
-  </section>
-  <button id="stop" type="button">STOP ROVER</button>
+  <main class="app-shell">
+    <h1 class="sr-only">STILL HERE rover control</h1>
+    <header>
+      <div class="brand" aria-label="STILL HERE rover teleoperation">
+        <div class="brand-index" aria-hidden="true">S/H</div>
+        <div class="brand-copy"><div class="brand-name">still<br>here</div><div class="brand-subtitle">Rover teleoperation</div></div>
+      </div>
+      <p class="intro">Hold the phone flat, screen up. Tilt forward to move forward, then tilt left or right to steer.</p>
+    </header>
+    <section class="panel connection-panel" aria-label="Phone connection">
+      <button id="enable" class="primary" type="button">Enable phone controls</button>
+      <div class="status-group" aria-live="polite" aria-atomic="true"><p id="status" class="status bad" role="status">Not connected</p><p id="motion-status" class="status neutral">Waiting for phone motion</p></div>
+      <button id="calibrate" class="secondary" type="button" disabled>Centre tilt</button>
+    </section>
+    <section class="panel control-panel" aria-label="Rover controls">
+      <div class="mode-tabs" role="tablist" aria-label="Rover control mode">
+        <button id="drive" role="tab" aria-selected="true" aria-controls="drive-summary" type="button">Drive</button>
+        <button id="arm" role="tab" aria-selected="false" aria-controls="arm-controls" type="button">Arm</button>
+      </div>
+      <p id="drive-summary" class="mode-summary"><strong>Drive mode</strong><br>Phone tilt controls the wheels.</p>
+      <div id="arm-controls" hidden>
+        <p class="mode-summary"><strong>Arm mode</strong><br>Phone tilt positions the arm. Adjust the elbow and gripper here.</p>
+        <label class="control-label" for="elbow">Elbow <output id="elbow-value">−90°</output></label>
+        <input id="elbow" type="range" min="-135" max="135" value="-90" aria-describedby="elbow-value">
+        <button id="grip" class="grip-button" data-open="true" type="button">Gripper open</button>
+      </div>
+    </section>
+    <div class="emergency-wrap"><button id="stop" class="emergency" type="button">STOP ROVER</button></div>
+  </main>
   <script>
     const status = document.querySelector('#status');
     const elbow = document.querySelector('#elbow');
@@ -43,84 +131,39 @@
     const drive = document.querySelector('#drive');
     const arm = document.querySelector('#arm');
     const grip = document.querySelector('#grip');
+    const armControls = document.querySelector('#arm-controls');
+    const driveSummary = document.querySelector('#drive-summary');
     const motionStatus = document.querySelector('#motion-status');
+    const calibrate = document.querySelector('#calibrate');
     let socket; let mode = 'drive'; let gripOpen = true; let enabled = false;
     let orientation = { beta: 0, gamma: 0 };
     let needsCalibration = true; let lastMotionAt = 0;
     let lastOrientationAt = 0; let motionSource = '';
-
     function setStatus(text, connected) { status.textContent = text; status.className = `status ${connected ? 'good' : 'bad'}`; }
-    function send(extra = {}, force = false) {
-      if (!force && !enabled) return;
-      if (!socket || socket.readyState !== WebSocket.OPEN) return;
-      socket.send(JSON.stringify({ ...orientation, mode, elbow: Number(elbow.value), grip: gripOpen, ...extra }));
-    }
-    function selectMode(next) { mode = next; drive.classList.toggle('active', mode === 'drive'); arm.classList.toggle('active', mode === 'arm'); send({ calibrate: true }); }
-    function acceptTilt(beta, gamma, source) {
-      if (!enabled || !Number.isFinite(beta) || !Number.isFinite(gamma)) return;
-      if (motionSource !== source) needsCalibration = true;
-      motionSource = source;
-      orientation = { beta, gamma };
-      lastMotionAt = Date.now();
-      motionStatus.textContent = `${source}: forward/back ${beta.toFixed(1)}°, left/right ${gamma.toFixed(1)}°`;
-      motionStatus.className = 'status good';
-      send({ calibrate: needsCalibration });
-      needsCalibration = false;
-    }
-    function onOrientation(event) {
-      if (!enabled || !Number.isFinite(event.beta) || !Number.isFinite(event.gamma)) return;
-      lastOrientationAt = Date.now();
-      acceptTilt(event.beta, event.gamma, 'Orientation tilt');
-    }
-    function onMotion(event) {
-      if (!enabled || (lastOrientationAt && Date.now() - lastOrientationAt < 1000)) return;
-      const gravity = event.accelerationIncludingGravity;
-      if (!gravity || ![gravity.x, gravity.y, gravity.z].every(Number.isFinite)) return;
-      if (Math.hypot(gravity.x, gravity.y, gravity.z) < 1) return;
-      // Gravity gives pitch and roll even on phones without a gyroscope.
-      // Hold in portrait, screen up; moving/shaking also affects these readings.
-      const beta = Math.atan2(gravity.y, gravity.z) * 180 / Math.PI;
-      const gamma = Math.atan2(-gravity.x, Math.hypot(gravity.y, gravity.z)) * 180 / Math.PI;
-      acceptTilt(beta, gamma, 'Accelerometer tilt');
-    }
+    function syncControlAvailability() { const driving = mode === 'drive'; armControls.hidden = mode !== 'arm'; drive.setAttribute('aria-selected', String(driving)); arm.setAttribute('aria-selected', String(!driving)); driveSummary.hidden = !driving; }
+    function send(extra = {}, force = false) { if (!force && !enabled) return; if (!socket || socket.readyState !== WebSocket.OPEN) return; socket.send(JSON.stringify({ ...orientation, mode, elbow: Number(elbow.value), grip: gripOpen, ...extra })); }
+    function selectMode(next) { mode = next; syncControlAvailability(); send({ calibrate: true }); }
+    function acceptTilt(beta, gamma, source) { if (!enabled || !Number.isFinite(beta) || !Number.isFinite(gamma)) return; if (motionSource !== source) needsCalibration = true; motionSource = source; orientation = { beta, gamma }; lastMotionAt = Date.now(); motionStatus.textContent = `${source}: forward/back ${beta.toFixed(1)}°, left/right ${gamma.toFixed(1)}°`; motionStatus.className = 'status good'; send({ calibrate: needsCalibration }); needsCalibration = false; }
+    function onOrientation(event) { if (!enabled || !Number.isFinite(event.beta) || !Number.isFinite(event.gamma)) return; lastOrientationAt = Date.now(); acceptTilt(event.beta, event.gamma, 'Orientation tilt'); }
+    function onMotion(event) { if (!enabled || (lastOrientationAt && Date.now() - lastOrientationAt < 1000)) return; const gravity = event.accelerationIncludingGravity; if (!gravity || ![gravity.x, gravity.y, gravity.z].every(Number.isFinite)) return; if (Math.hypot(gravity.x, gravity.y, gravity.z) < 1) return; const beta = Math.atan2(gravity.y, gravity.z) * 180 / Math.PI; const gamma = Math.atan2(-gravity.x, Math.hypot(gravity.y, gravity.z)) * 180 / Math.PI; acceptTilt(beta, gamma, 'Accelerometer tilt'); }
     window.addEventListener('deviceorientation', onOrientation);
     window.addEventListener('devicemotion', onMotion);
-    function stop() {
-      enabled = false;
-      send({ stop: true }, true);
-      setStatus('Stopped. Enable controls to drive again.', false);
-    }
-    setInterval(() => {
-      if (!enabled) return;
-      if (Date.now() - lastMotionAt > 1500) {
-        motionStatus.textContent = 'No tilt samples. Check browser motion permissions and that this phone has motion sensors. On Chrome for Android, plain http pages need chrome://flags/#unsafely-treat-insecure-origin-as-secure set to this page address.';
-        motionStatus.className = 'status bad';
-      }
-    }, 500);
-    async function enable() {
-      try {
-        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-          if (await DeviceOrientationEvent.requestPermission() !== 'granted') throw new Error('Motion permission was not granted');
-        }
-        if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-          if (await DeviceMotionEvent.requestPermission() !== 'granted') throw new Error('Accelerometer permission was not granted');
-        }
-        const socketScheme = location.protocol === 'https:' ? 'wss' : 'ws';
-        if (socket) { send({ stop: true }, true); socket.close(); }
-        const connection = new WebSocket(`${socketScheme}://${location.host}/phone`);
-        socket = connection;
-        socket.onopen = () => { enabled = true; needsCalibration = true; lastMotionAt = 0; lastOrientationAt = 0; motionSource = ''; setStatus('Connected — hold the phone still to centre tilt.', true); };
-        socket.onclose = () => { if (socket !== connection) return; enabled = false; setStatus('Connection closed — rover stopped.', false); };
-        socket.onerror = () => setStatus('Connection error. Check that the laptop and phone use the same Wi-Fi.', false);
-      } catch (error) { setStatus(error.message, false); }
-    }
+    function stop() { enabled = false; calibrate.disabled = true; send({ stop: true }, true); setStatus('Stopped. Enable controls to drive again.', false); }
+    setInterval(() => { if (!enabled) return; if (Date.now() - lastMotionAt > 1500) { motionStatus.textContent = 'No tilt samples. Check Chrome motion permissions and that this phone has motion sensors.'; motionStatus.className = 'status bad'; } }, 500);
+    async function enable() { try { if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function' && await DeviceOrientationEvent.requestPermission() !== 'granted') throw new Error('Motion permission was not granted'); if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function' && await DeviceMotionEvent.requestPermission() !== 'granted') throw new Error('Accelerometer permission was not granted'); if (socket) { send({ stop: true }, true); socket.close(); } const connection = new WebSocket(`ws://${location.host}/phone`); socket = connection; socket.onopen = () => { enabled = true; calibrate.disabled = false; needsCalibration = true; lastMotionAt = 0; lastOrientationAt = 0; motionSource = ''; setStatus('Connected. Hold the phone still to centre tilt.', true); }; socket.onclose = () => { if (socket !== connection) return; enabled = false; calibrate.disabled = true; setStatus('Connection closed. Rover stopped.', false); }; socket.onerror = () => setStatus('Connection error. Check that the laptop and phone use the same Wi-Fi.', false); } catch (error) { setStatus(error.message, false); } }
     document.querySelector('#enable').addEventListener('click', enable);
     drive.addEventListener('click', () => selectMode('drive'));
     arm.addEventListener('click', () => selectMode('arm'));
+    [drive, arm].forEach((tab, index) => tab.addEventListener('keydown', event => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+      const next = event.key === 'ArrowLeft' ? (index + 1) % 2 : (index + 1) % 2;
+      [drive, arm][next].focus();
+      selectMode(next === 0 ? 'drive' : 'arm');
+    }));
     elbow.addEventListener('input', () => { elbowValue.value = `${elbow.value}°`; send(); });
-    grip.addEventListener('click', () => { gripOpen = !gripOpen; grip.textContent = `Gripper: ${gripOpen ? 'open' : 'closed'}`; send(); });
-    document.querySelector('#stop').addEventListener('click', stop);
-    document.querySelector('#calibrate').addEventListener('click', () => { needsCalibration = true; });
+    grip.addEventListener('click', () => { gripOpen = !gripOpen; grip.dataset.open = String(gripOpen); grip.textContent = `Gripper ${gripOpen ? 'open' : 'closed'}`; send(); });
+    calibrate.addEventListener('click', () => { needsCalibration = true; });
     document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); });
   </script>
 </body>
