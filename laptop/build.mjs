@@ -23,7 +23,9 @@ for (const name of sources) {
   const output = header + stripTypeScriptTypes(code, { mode: "strip" });
   const target = join(here, name.replace(/\.ts$/, ".js"));
   if (check) {
-    if (!existsSync(target) || readFileSync(target, "utf8") !== output) {
+    // Git may turn line endings into Windows ones when it checks files out: that is not a change.
+    const lines = (text) => text.split("\r\n").join("\n");
+    if (!existsSync(target) || lines(readFileSync(target, "utf8")) !== lines(output)) {
       console.error(`${name.replace(/\.ts$/, ".js")} is out of date`);
       stale += 1;
     }
@@ -33,4 +35,4 @@ for (const name of sources) {
   }
 }
 
-if (check && stale > 0) process.exit(1);
+if (check && stale > 0) process.exitCode = 1;
