@@ -171,6 +171,7 @@ still-here/
     cam_scan.txt             Full camera pin scan, for when the probe finds no known map
     bringup.txt              Bench test for servos, wheels, sensors and battery, paste into the Arduino IDE
     esp32cam_stream.txt      Old AI-Thinker ESP32-CAM streaming sketch, reference only, not built
+    cam_stream.txt           GC2145 ESP32-CAM streaming sketch, reference only, not built
     rover_control.py         Menu client for the rover (uses the older command set, see docs/protocol.md)
     camera.h, camera.cpp     GC2145 camera: raw pictures turned into JPEG on the chip
     mjpeg_server.h, .cpp     Video over Wi-Fi: /stream (MJPEG), /capture (one picture)
@@ -187,6 +188,20 @@ still-here/
 The **two-block stack test**: on a two-layer stack the camera finds both blocks, software picks the top one, and the clamp removes it without disturbing the other. Run it 10 times and log each run in `docs/trials.csv`. If fewer than 8 pass, fix grip padding, block weight and camera placement, in that order, before any other feature.
 
 Pass rule: the bottom block moves less than 5 mm and rotates less than 10 degrees (measured from its marker before and after).
+
+## If the camera is an AI-Thinker ESP32-CAM with a GC2145
+
+The main design uses the ESP32-S3 board with its built-in camera, and `firmware/camera.cpp` serves the video. If you ever use a separate AI-Thinker ESP32-CAM instead, check its sensor first: some have a **GC2145**, not the usual OV2640. A GC2145 cannot make JPEGs itself, so the sketch captures small RGB565 pictures and converts each to JPEG on the chip. Update the Espressif board package first (an old one fails with `ESP_ERR_NOT_SUPPORTED`), do not use the default `CAMERA_MODEL_AI_THINKER` settings, and use 2.4 GHz Wi-Fi. A working example is kept in `firmware/cam_stream.txt`, with the steps in its header. It is reference only and is not built.
+
+## Phone and Blender digital twin
+
+You can rehearse manual control without any rover hardware. The phone sends tilt samples to the laptop, the laptop turns them into the same drive and arm messages the firmware will use, and Blender runs the same rover model (`laptop/sim_rover.py`).
+
+1. Install Blender 4.x and launch the twin from the repo root: `blender --python simulation/blender_rover.py`.
+2. In a second terminal, start the bridge: `laptop/.venv/Scripts/python -m uvicorn simulation.phone_bridge:app --host 0.0.0.0 --port 8765`.
+3. On the phone, on the same Wi-Fi or hotspot, open `http://<laptop-ip>:8765`, tap **Enable phone controls**, accept motion permission, and hold the phone still so it centres.
+
+The wheels stop on a mode switch, when the phone leaves, and when the phone is quiet for half a second. The page is plain http, so Android Chrome needs a motion setting for that address and iPhones are not expected to work. The full guide is `docs/phone-simulation.md`.
 
 ## Team rules
 
