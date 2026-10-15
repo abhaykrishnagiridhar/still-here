@@ -153,6 +153,8 @@ still-here/
     test_vision.py           Tests for the vision demo on synthetic pictures
     server.py                Operator server: camera with the plan drawn on it, tap, approve, report
     operator_core.py         What the operator sees and may approve; sends the plan to the rover
+    scene_watch.py           Compares each picture with the scene a plan was made for: a block moved, vanished or appeared
+    test_scene_watch.py, test_operator_replan.py  Tests for the scene check and for stopping and re-planning
     rover_link.py            The server's WebSocket link to the rover: pings every 0.5 s, reconnects by itself
     sim_server.py            The software rover as a WebSocket server, to test the real link with no hardware
     test_rover_link.py, test_sim_server.py  Tests for the link and the software rover server

@@ -24,6 +24,7 @@ from typing import Callable, Optional, Protocol
 from plan_message import build_abort_message, build_plan_message, build_plan_start_message
 from report import build_report, choose_summary, render_report
 from route import RoutePlan
+from scene_watch import SceneWatch
 
 # Where picked blocks are put down, in the arm frame (mm). An assumption until the rover is built.
 DROP_POINT_MM = (100.0, -90.0)
@@ -78,6 +79,7 @@ class Operator:
         # Unique per start, so a plan the rover still holds from an earlier session is never mistaken for this one.
         self._next_plan_id = int(clock() * 10) % 1_000_000 + 1
         self._survivor_hint: Optional[tuple[int, int]] = None
+        self._queued_facts: list[dict] = []  # runs that were stopped and replaced, waiting to be written up
         self._reset_run()
 
     # ---- run bookkeeping ---------------------------------------------------------
@@ -98,6 +100,9 @@ class Operator:
         self._obstacles = 0
         self._obstacle_active = False
         self._facts_handed_over = False
+        self._watch: Optional[SceneWatch] = None  # compares each picture with the scene the plan was made for
+        self._current_step = 0  # the step the rover says it is on
+        self._notice: Optional[str] = None  # why the last run was stopped, shown with the fresh plan
 
     def reset(self) -> None:
         """Start a fresh run. The tapped survivor is forgotten with it."""
@@ -117,11 +122,40 @@ class Operator:
 
     # ---- what the camera sees ----------------------------------------------------
     def observe(self, seen) -> None:
-        if self._phase in ("waiting", "running"):
-            return  # the approved plan is not changed by what the camera sees now
         self._latest = seen
-        if self._phase == "verifying":
+        if self._phase in ("waiting", "running"):
+            # The approved plan itself is never changed by what the camera sees now. But if the
+            # scene stops matching it, the rover is stopped and a fresh plan is offered.
+            self._check_the_scene(seen)
+        elif self._phase == "verifying":
             self._check_the_way_is_clear(seen)
+
+    def _handled_ids(self) -> set[int]:
+        """Blocks the rover has started on: the one it is on and the ones it has done. They are
+        expected to move, so they are not watched."""
+        started = max(max(self._results, default=0) + 1, self._current_step)
+        return {item["id"] for item in self._frozen["order"] if 2 * item["n"] - 1 <= started}
+
+    def _check_the_scene(self, seen) -> None:
+        scene = getattr(seen, "scene", None)
+        if self._watch is None or scene is None:
+            return  # nothing to compare with
+        reason = self._watch.check(scene.blocks, self._handled_ids(), self._clock())
+        if reason is not None:
+            self._replan(reason)
+
+    def _replan(self, reason: str) -> None:
+        """The scene no longer matches the approved plan. Stop the rover, write the run up as a
+        safe stop, and go back to a fresh plan from the latest picture. The person must approve
+        it: the rover never carries on with a plan nobody has looked at."""
+        self._link.send(build_abort_message())
+        self._phase = "aborted"
+        self._note = f"Stopped: {reason}."
+        self._queued_facts.append(self.facts())
+        latest = self._latest
+        self._reset_run()
+        self._latest = latest
+        self._notice = f"The rover was stopped because the scene changed: {reason}."
 
     def _check_the_way_is_clear(self, seen) -> None:
         result = seen.result
@@ -180,6 +214,10 @@ class Operator:
         path = self._latest.result.path
         self._frozen_survivor = path[-1] if path else None
         self._results = {}
+        scene = getattr(self._latest, "scene", None)
+        self._watch = SceneWatch(scene.blocks, drop_mm=self._drop) if scene is not None else None
+        self._current_step = 0
+        self._notice = None  # the person has seen why the last run stopped and approved the new plan
         self._approved_at = self._clock()
         self._phase = "waiting"
         self._note = "Waiting for the rover to confirm the plan."
@@ -228,6 +266,8 @@ class Operator:
         self._obstacle_active = tripped
 
     def _on_state(self, message: dict) -> None:
+        if message.get("plan_id") == self._plan_id and isinstance(message.get("step_id"), int):
+            self._current_step = message["step_id"]
         if self._phase == "waiting" and message.get("plan_id") == self._plan_id:
             self._link.send(build_plan_start_message(self._plan_id))
             self._phase = "running"
@@ -242,7 +282,7 @@ class Operator:
         elif code == "aborted" and self._phase in BUSY_PHASES:
             self._phase = "aborted"
             self._note = "The rover stopped."
-        elif code == "bad_plan":
+        elif code == "bad_plan" and self._phase in BUSY_PHASES:
             self._phase = "aborted"
             self._note = "The rover refused the plan."
         elif code == "link_lost":
@@ -268,6 +308,7 @@ class Operator:
             "progress": {"done": len(self._results), "total": len(self._steps)},
             "link_up": self._link_up,
             "verified": self._verified,
+            "notice": self._notice,
         }
 
     # ---- the report --------------------------------------------------------------
@@ -293,6 +334,8 @@ class Operator:
 
     def take_finished_facts(self) -> Optional[dict]:
         """The facts of a run that has just ended, once. The server writes the report file then."""
+        if self._queued_facts:
+            return self._queued_facts.pop(0)
         if self._phase in ENDED_PHASES and not self._facts_handed_over:
             self._facts_handed_over = True
             return self.facts()

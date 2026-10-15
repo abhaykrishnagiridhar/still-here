@@ -83,6 +83,11 @@ export function roverNotice(connected: boolean, address: string, error: string):
   return `Not connected to the rover at ${address}. Nothing can be sent until it is.${detail}`;
 }
 
+// The status line: why the last run was stopped (if it was), then what is happening now.
+export function withNotice(notice: string | null, message: string): string {
+  return notice ? `${notice} ${message}` : message;
+}
+
 const WARN_PHASES = ["blocked", "aborted", "need_survivor"];
 
 export function toneFor(phase: string, linkUp: boolean, verified: boolean | null, cameraError: string | null): Tone {

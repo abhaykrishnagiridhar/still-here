@@ -135,6 +135,8 @@ still-here/
     test_vision.py           Tests for the vision demo on synthetic pictures
     server.py                Operator server: camera with the plan drawn on it, tap, approve, report
     operator_core.py         What the operator sees and may approve; sends the plan to the rover
+    scene_watch.py           Compares each picture with the scene a plan was made for: a block moved, vanished or appeared
+    test_scene_watch.py, test_operator_replan.py  Tests for the scene check and for stopping and re-planning
     rover_link.py            The server's WebSocket link to the rover: pings every 0.5 s, reconnects by itself
     sim_server.py            The software rover as a WebSocket server, to test the real link with no hardware
     test_rover_link.py, test_sim_server.py  Tests for the link and the software rover server
@@ -231,7 +233,7 @@ Run the operator pages (camera, plan, approve, report) and the manual control pa
 python server.py              # the real rover (still-here.local) and its video; --simulate for no hardware
 ```
 
-Then open http://127.0.0.1:8000/ for autonomous mode and http://127.0.0.1:8000/control.html for manual control. The server finds the rover by its name, `still-here.local` (set in `config.toml`, or pass `--rover <name or address>`), and the rover firmware is expected to announce that name on the network. If the rover cannot be reached the pages say so and send nothing. With no hardware, use `python server.py clip.avi --simulate`, or run `python sim_server.py` in another window (the software rover as a WebSocket server) and start the server with `--rover 127.0.0.1` to try the whole real-rover path.
+Then open http://127.0.0.1:8000/ for autonomous mode and http://127.0.0.1:8000/control.html for manual control. While the rover works, the server keeps watching the camera. If a block it has not touched moves, vanishes, or a new one appears, it stops the rover, writes the run up as a safe stop, and offers a fresh plan from the new picture. The rover never carries on with a plan nobody has looked at: you approve the new one. The server finds the rover by its name, `still-here.local` (set in `config.toml`, or pass `--rover <name or address>`), and the rover firmware is expected to announce that name on the network. If the rover cannot be reached the pages say so and send nothing. With no hardware, use `python server.py clip.avi --simulate`, or run `python sim_server.py` in another window (the software rover as a WebSocket server) and start the server with `--rover 127.0.0.1` to try the whole real-rover path.
 
 First-time setup, in this order:
 

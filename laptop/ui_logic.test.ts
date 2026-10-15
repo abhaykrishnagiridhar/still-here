@@ -10,6 +10,7 @@ import {
   headlineFor,
   keyDirection,
   roverNotice,
+  withNotice,
   toDisplay,
   toFrame,
   toneFor,
@@ -93,4 +94,9 @@ test("a rover that cannot be reached is named, and the reason is added when ther
   assert.ok(plain?.includes("ws://still-here.local:81"));
   assert.ok(plain?.includes("Nothing can be sent"));
   assert.ok(roverNotice(false, "ws://x:81", "refused")?.endsWith("(refused)"));
+});
+
+test("a stopped run is explained before what is happening now", () => {
+  assert.equal(withNotice(null, "2 blocks to remove."), "2 blocks to remove.");
+  assert.equal(withNotice("The rover was stopped.", "2 blocks to remove."), "The rover was stopped. 2 blocks to remove.");
 });
