@@ -1,5 +1,8 @@
 """Contract tests for the browser-to-Blender gyro bridge."""
 
+import json
+import socket
+
 import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
@@ -113,3 +116,76 @@ def test_the_phone_page_is_served_over_plain_http():
     assert response.status_code == 200
     assert "new WebSocket" in response.text
     assert "certificate" not in response.text.lower()
+
+
+# --- what actually reaches Blender: bad input must fail closed ------------------------------------
+
+STOP = {"kind": "command", "message": {"type": "drive", "left": 0.0, "right": 0.0}}
+LOCAL = {"origin": "http://127.0.0.1:8765"}
+
+
+@pytest.fixture
+def blender(monkeypatch):
+    """A fake Blender: a UDP socket that receives whatever the bridge sends."""
+    listener = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    listener.bind(("127.0.0.1", 0))
+    monkeypatch.setattr(phone_bridge, "BLENDER_PORT", listener.getsockname()[1])
+    yield listener
+    listener.close()
+
+
+def received(listener, quiet=0.4):
+    packets = []
+    listener.settimeout(quiet)
+    while True:
+        try:
+            raw, _ = listener.recvfrom(4096)
+        except socket.timeout:
+            return packets
+        packets.append(json.loads(raw))
+
+
+def moving(packet):
+    message = packet["message"]
+    return message["type"] == "drive" and (message["left"] != 0.0 or message["right"] != 0.0)
+
+
+def test_bad_samples_never_make_the_rover_move_and_do_not_end_the_connection(blender):
+    client = TestClient(phone_bridge.app)
+
+    with client.websocket_connect("/phone", headers=LOCAL) as ws:
+        ws.send_text(json.dumps({"beta": 0, "gamma": 0, "mode": "drive", "calibrate": True}))
+        ws.send_text('{"beta": NaN, "gamma": 0, "mode": "drive"}')
+        ws.send_text('{"beta": Infinity, "gamma": 0, "mode": "drive"}')
+        ws.send_text(json.dumps({"beta": 0, "gamma": 0, "mode": "arm", "elbow": "bent"}))
+        ws.send_text("[1, 2, 3]")
+        ws.send_text('"just text"')
+        ws.send_text(json.dumps({"beta": 0, "gamma": 0, "mode": "drive"}))  # still accepted afterwards
+
+    packets = received(blender)
+    assert not any(moving(p) for p in packets)
+    assert packets[-1] == STOP
+
+
+def test_the_wheels_are_stopped_whatever_ends_the_connection(blender, monkeypatch):
+    def explode(self, sample, now):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(phone_bridge.PhoneBridge, "handle_all", explode)
+    client = TestClient(phone_bridge.app)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        with client.websocket_connect("/phone", headers=LOCAL) as ws:
+            ws.send_text(json.dumps({"beta": 0, "gamma": 0}))
+            ws.receive_text()
+
+    assert received(blender)[-1] == STOP
+
+
+def test_a_clean_disconnect_still_sends_one_stop(blender):
+    client = TestClient(phone_bridge.app)
+
+    with client.websocket_connect("/phone", headers=LOCAL) as ws:
+        ws.send_text(json.dumps({"beta": 0, "gamma": 0, "mode": "drive", "calibrate": True}))
+
+    assert received(blender)[-1] == STOP

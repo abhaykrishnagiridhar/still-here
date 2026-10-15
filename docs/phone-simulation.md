@@ -33,14 +33,14 @@ The link is one-way. Nothing goes back to the phone except the WebSocket staying
 | File | Lines | Role |
 |---|---|---|
 | `simulation/phone_control.html` | 170 | The phone page. Reads tilt sensors, has Drive and Arm tabs, an elbow slider and gripper button (shown only in Arm mode), Centre tilt and STOP. |
-| `simulation/phone_bridge.py` | 100 | FastAPI app. Serves the page, a health check, and the WebSocket. Turns samples into messages and forwards them over UDP. |
+| `simulation/phone_bridge.py` | 109 | FastAPI app. Serves the page, a health check, and the WebSocket. Turns samples into messages and forwards them over UDP. |
 | `simulation/blender_rover.py` | 225 | Runs inside Blender. Builds the scene, listens on UDP, steps `SimRover`, moves the 3D objects. |
-| `simulation/test_phone_bridge.py` | 115 | 20 tests for the bridge (messages, mode-change stop, stale-phone stop, the page's structure, origin rule, WebSocket). |
-| `laptop/gyro_map.py` | 113 | Pure logic: tilt angles to `drive` and `arm_pose` messages. No network, no clock. |
+| `simulation/test_phone_bridge.py` | 191 | 23 tests for the bridge (messages, mode-change stop, stale-phone stop, bad input never moving the rover, the stop on every kind of exit, the page's structure, origin rule, WebSocket). |
+| `laptop/gyro_map.py` | 121 | Pure logic: tilt angles to `drive` and `arm_pose` messages. No network, no clock. |
 | `laptop/sim_rover.py` | 418 | The software rover: protocol handler, wheel and arm motion, plan runner, sensors. Pure logic with an explicit clock. |
 | `laptop/origin_guard.py` | 25 | `origin_allowed(origin)`: which web pages may use the WebSocket. |
 | `laptop/models.py` | 48 | Frozen dataclasses `Block`, `HeatZone`, `PlanStep`, `Plan`. |
-| `laptop/test_gyro_map.py`, `laptop/test_sim_rover.py` | | 25 and 42 tests for the two logic modules. |
+| `laptop/test_gyro_map.py`, `laptop/test_sim_rover.py` | | 33 and 42 tests for the two logic modules. |
 
 `phone_bridge.py` and `blender_rover.py` add the `laptop/` folder to `sys.path` themselves, so they can import `gyro_map`, `sim_rover`, `models` and `origin_guard` without installing the project. `simulation/` has no `__init__.py`; it works as a namespace package (`simulation.phone_bridge:app`).
 
@@ -81,7 +81,7 @@ Constants: full output at a 30 degree tilt (`TILT_FULL_DEG`), 4 degree dead zone
 - **Arm mode:** `base = -axis(d_gamma) * 90`, `shoulder = 60 + axis(d_beta) * 60`, `elbow` and `gripper` from the screen (gripper open = 90, closed = 0). Output: `{"type": "arm_pose", "base": .., "shoulder": .., "elbow": .., "gripper": .., "speed": 1.0}`, rounded to 2 places.
 - A `stop` sample returns one zero-speed `drive` message.
 - A mode change returns two messages: a zero-speed `drive`, then the first message of the new mode (see the limitations in section 10).
-- A sample whose `beta` or `gamma` is missing or not a number returns `[]`. An unknown `mode` keeps the current one.
+- A sample is checked in full before anything is remembered: if `beta`, `gamma` or `elbow` is missing, not a number, `NaN` or infinite, the whole sample is ignored (`[]`) and the session's mode, centre, smoothing and "phone is alive" clock are left as they were. This matters because Python's JSON reader accepts `NaN` and `Infinity`, which would otherwise become full-speed motion. An unknown `mode` keeps the current one.
 - `idle(now)` returns one zero-speed drive message when no sample has arrived for 0.5 s, then stays quiet until the next sample. The bridge calls it (section 7).
 
 The messages match `docs/protocol.md` (`drive`: `left`, `right` in -1..1; `arm_pose`: `base`, `shoulder`, `elbow`, `gripper` in degrees, `speed` 0..1).
@@ -102,7 +102,7 @@ laptop/.venv/Scripts/python -m uvicorn simulation.phone_bridge:app --host 0.0.0.
 
 - **What is forwarded:** `PhoneBridge.handle_all` returns one `{"kind": "command", "message": ...}` packet for every message the session produced, so a mode change keeps its zero-speed `drive` before the first arm command. Each packet is sent as its own UDP datagram to `127.0.0.1:8766`. `PhoneBridge.handle` is kept for older callers and returns only the final packet, or `None`.
 - **Phone gone quiet:** the WebSocket loop waits at most 0.1 s for a sample. On each timeout it calls `PhoneBridge.idle`, which sends one zero-speed `drive` once the phone has been silent for 0.5 s and then stays quiet until the next sample.
-- **On disconnect** the bridge sends one zero-speed `drive` command to Blender.
+- **Fail closed:** whatever ends a WebSocket connection (the phone leaving, unreadable data, or a crash in the handler), the bridge sends one zero-speed `drive` command to Blender before it closes its socket. A sample that cannot be read (bad JSON, wrong type, bad numbers) is skipped and never reaches the rover, and the connection stays open.
 - **Origin rule** (`origin_allowed`): the WebSocket is refused with close code 1008 unless the `Origin` header is missing (scripts) or its host is `localhost`, a loopback address, a private LAN address or a link-local address. This stops a web page on the public internet from driving the rover through a visitor's browser. It is not authentication: any device on the same network that sends no `Origin` header, or a local one, can connect.
 - **Plain http on purpose.** Browsers treat plain-http pages as insecure, which limits motion sensors: on Chrome for Android the flag `chrome://flags/#unsafely-treat-insecure-origin-as-secure` must be set to the page's address; iOS Safari requires a secure page for motion permission, so an iPhone is not expected to work over http. There is no HTTPS or certificate setup in the repository any more.
 
@@ -152,7 +152,7 @@ At start it clears the scene, builds the objects below, binds UDP `127.0.0.1:876
 
 - **Install:** the project virtual environment (`laptop/.venv`, Python 3.13) already has FastAPI and uvicorn. Tests also need the `dev` extra (`pytest`, `pytest-cov`, `httpx2`).
 - **Run order:** start Blender with the script, then start the bridge, then open `http://<laptop-ip>:8765/` on the phone (same Wi-Fi), press Enable phone controls and hold the phone still so it centres.
-- **Tests:** from the `simulation/` folder, `../laptop/.venv/Scripts/python -m pytest -q` runs the 20 bridge tests. From `laptop/`, `.venv/Scripts/python -m pytest -q test_gyro_map.py test_sim_rover.py` runs the logic tests. From the repository root, `pytest` runs everything.
+- **Tests:** from the `simulation/` folder, `../laptop/.venv/Scripts/python -m pytest -q` runs the 23 bridge tests. From `laptop/`, `.venv/Scripts/python -m pytest -q test_gyro_map.py test_sim_rover.py` runs the logic tests. From the repository root, `pytest` runs everything.
 - **Bridge tests cover:** the page's structure (arm controls hidden in Drive mode, tabs, safe-area and reduced-motion rules), a smoothed drive command after calibration, the arm message shape, bad input, the stop kept before the arm command on a mode change, the single stop after the phone goes stale, the origin rule for allowed and refused pages, a refused and an accepted WebSocket, and the page being served over http.
 
 ## 12. Where to change things

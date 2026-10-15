@@ -213,3 +213,53 @@ def test_a_new_sample_after_a_stop_makes_the_phone_live_again():
     session.update({"beta": -30.0, "gamma": 0.0}, 6.0)
 
     assert session.idle(6.0 + gyro_map.STALE_AFTER_S + 0.1) == [STOP]
+
+
+# --- bad input must never become motion, and must never change what the session remembers ---------
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"beta": float("nan"), "gamma": 0},
+        {"beta": float("inf"), "gamma": 0},
+        {"beta": 0, "gamma": float("-inf")},
+        {"beta": 0, "gamma": 0, "mode": "arm", "elbow": float("nan")},
+        {"beta": 0, "gamma": 0, "mode": "arm", "elbow": float("inf")},
+    ],
+)
+def test_a_sample_with_a_number_that_is_not_finite_is_ignored(bad):
+    session = GyroSession()
+    session.update({"beta": 0.0, "gamma": 0.0}, 0.0)
+
+    assert session.update(bad, 0.1) == []
+
+
+def test_a_not_finite_sample_does_not_poison_the_later_ones():
+    session = GyroSession()
+    session.update({"beta": 0.0, "gamma": 0.0}, 0.0)
+    session.update({"beta": float("nan"), "gamma": 0.0}, 0.1)
+
+    out = settle(session, {"beta": -30.0, "gamma": 0.0}, start=0.2)
+
+    assert out[-1]["left"] == pytest.approx(1.0, abs=0.01)
+
+
+def test_a_bad_elbow_is_ignored_and_the_mode_change_is_not_lost():
+    session = GyroSession()
+    session.update({"beta": 0.0, "gamma": 0.0, "mode": "drive"}, 0.0)
+
+    assert session.update({"beta": 0.0, "gamma": 0.0, "mode": "arm", "elbow": "bent"}, 0.1) == []
+
+    out = session.update({"beta": 0.0, "gamma": 0.0, "mode": "arm", "elbow": -90.0}, 0.2)
+    assert [m["type"] for m in out] == ["drive", "arm_pose"]  # the stop still comes first
+    assert out[0] == STOP
+
+
+def test_a_bad_sample_does_not_count_as_the_phone_being_alive():
+    session = GyroSession()
+    session.update({"beta": 0.0, "gamma": 0.0}, 0.0)
+
+    session.update({"beta": float("nan"), "gamma": 0.0}, 0.4)
+
+    assert session.idle(0.0 + gyro_map.STALE_AFTER_S + 0.1) == [STOP]

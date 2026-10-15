@@ -9,6 +9,7 @@ Only beta (front-back) and gamma (left-right) are used. alpha (compass heading) 
 phones, so it is deliberately ignored.
 """
 
+from math import isfinite
 from typing import Optional
 
 TILT_FULL_DEG = 30.0  # tilt that gives full output
@@ -20,6 +21,7 @@ SHOULDER_CENTRE_DEG = 60.0
 SHOULDER_SWING_DEG = 60.0
 BASE_SWING_DEG = 90.0
 ELBOW_LIMIT_DEG = 135.0
+DEFAULT_ELBOW_DEG = -90.0  # used when a sample says nothing about the elbow
 GRIPPER_OPEN_DEG = 90.0
 GRIPPER_CLOSED_DEG = 0.0
 
@@ -71,10 +73,16 @@ class GyroSession:
         self._smooth = (beta, gamma)
 
     def update(self, sample: dict, now: float) -> list[dict]:
+        # Check every number before anything is remembered. A half-read sample must not change the
+        # mode, the centre or the smoothing, and NaN or infinity (which Python's JSON reader accepts)
+        # must never become full-speed motion.
         try:
             beta = float(sample["beta"])
             gamma = float(sample["gamma"])
-        except (KeyError, TypeError, ValueError):
+            elbow = float(sample.get("elbow", DEFAULT_ELBOW_DEG))
+        except (KeyError, TypeError, ValueError, AttributeError):
+            return []
+        if not all(isfinite(value) for value in (beta, gamma, elbow)):
             return []
         if self._smooth is None or sample.get("calibrate"):
             self.calibrate(beta, gamma)  # first sample: whatever you hold is the centre
@@ -99,7 +107,7 @@ class GyroSession:
             left, right = drive_command(d_beta, d_gamma)
             out.append({"type": "drive", "left": round(left, 3), "right": round(right, 3)})
         else:
-            pose = arm_command(d_beta, d_gamma, float(sample.get("elbow", -90.0)), bool(sample.get("grip", True)))
+            pose = arm_command(d_beta, d_gamma, elbow, bool(sample.get("grip", True)))
             out.append({"type": "arm_pose", **{k: round(v, 2) for k, v in pose.items()}, "speed": 1.0})
         return out
 
