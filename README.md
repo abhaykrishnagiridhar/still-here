@@ -106,9 +106,11 @@ still-here/
     test_planner.py          Tests for the planner
     route.py                 Which blocks to remove to reach the survivor: cheapest route, heavy blocks and heat avoided
     test_route.py            Tests for the route search
+    aruco.py                 ArUco markers on blocks: id, layer, weight; reads config.toml
     scale.py                 Pixels to millimetres, learned from the 40 mm blocks
     scene.py                 Turns picture positions into millimetres and picks plan or route
     stream.py                Reopens the camera stream when it drops out
+    test_aruco.py            Tests for the markers and the config
     test_scale.py            Tests for the scale
     test_scene.py            Tests for the scene
     test_stream.py           Tests for the stream
@@ -125,7 +127,7 @@ still-here/
     ui.html, ui.ts *         Operator page: tap survivor, see plan, final report
   firmware/
     main.cpp                 Boot stub, grows into the rover loop
-    pins.h                   Pin map, every pin -1 until the hardware design is read
+    pins.h                   Pin map for the ESP32-S3 board: camera confirmed, the rest untested
     platformio.ini           ESP32-S3 N16R8 build settings, flat layout
     secrets.example.h        Wi-Fi template for the 2.4 GHz phone hotspot
     rover_sketch.txt         Earlier all-in-one rover sketch, reference only, not built

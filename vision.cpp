@@ -2,7 +2,7 @@
 //
 // Usage:  vision.exe            webcam 0
 //         vision.exe 1          webcam 1
-//         vision.exe http://192.168.0.50/stream    the ESP32-CAM stream
+//         vision.exe http://192.168.0.50/stream    the rover camera stream
 //         vision.exe 0 snapshots    also saves the annotated frame to the existing folder
 //                                   "snapshots" every time the plan changes
 //
@@ -11,6 +11,9 @@
 // The blocks are 40 mm cubes. How big they look sets the scale, so positions are printed in
 // millimetres from the rover (forward and left) and anything the wrong size for a block, such
 // as a table edge, is ignored. A network camera that drops out is reopened by itself.
+//
+// FROZEN: laptop/vision.py is the vision engine of record. This copy is kept as a standalone
+// demo and will not get ArUco markers, the survivor search or route planning. Fix bugs here only.
 //
 // This is the simple version. laptop/vision.py is the main one: it also finds the pulsing
 // survivor light (so an amber survivor LED is NOT mistaken for fire there, but IS here) and
@@ -63,7 +66,7 @@ cv::VideoCapture openSource(const std::string& source) {
         capture.open(std::stoi(source));
 #endif
     } else {
-        capture.open(source);  // a stream URL such as the ESP32-CAM's /stream, or a video file
+        capture.open(source);  // a stream URL such as the rover camera's /stream, or a video file
     }
     capture.set(cv::CAP_PROP_BUFFERSIZE, 1);  // keep only the newest picture, so a stream does not lag
     return capture;

@@ -52,19 +52,29 @@ def build_scene(
 ) -> Scene:
     """Colour cannot tell layers or weights apart yet, so every block is a light layer-1 block."""
 
-    def in_mm(x: float, y: float) -> Point:
-        return to_mm((x, y), origin_px, px_per_mm)
-
     blocks = []
     for t in blocks_px:
-        forward, left = in_mm(t.x, t.y)
+        forward, left = to_mm((t.x, t.y), origin_px, px_per_mm)
         blocks.append(Block(id=t.id, marker_id=t.id, x=forward, y=left, layer=1))
+    return scene_from_blocks(blocks, heat_px, survivor_px, origin_px, px_per_mm, heat_radius_mm)
+
+
+def scene_from_blocks(
+    blocks_mm: Sequence[Block],
+    heat_px: Sequence[Located],
+    survivor_px: Optional[Point],
+    origin_px: Point,
+    px_per_mm: float,
+    heat_radius_mm: float = HEAT_RADIUS_MM,
+) -> Scene:
+    """The same scene when the blocks are already in millimetres with their layer and weight,
+    as they are when they come from ArUco markers."""
     zones = []
     for t in heat_px:
-        forward, left = in_mm(t.x, t.y)
+        forward, left = to_mm((t.x, t.y), origin_px, px_per_mm)
         zones.append(HeatZone(x=forward, y=left, radius=heat_radius_mm))
-    survivor = None if survivor_px is None else in_mm(survivor_px[0], survivor_px[1])
-    return Scene(blocks=tuple(blocks), heat_zones=tuple(zones), survivor=survivor)
+    survivor = None if survivor_px is None else to_mm(survivor_px, origin_px, px_per_mm)
+    return Scene(blocks=tuple(blocks_mm), heat_zones=tuple(zones), survivor=survivor)
 
 
 def decide(scene: Scene, start: Point = ROVER_MM) -> Union[PlanResult, RoutePlan]:

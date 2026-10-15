@@ -116,6 +116,81 @@ def test_run_plays_a_video_file_to_the_end_and_prints_the_plan(tmp_path, capsys,
     assert "Pick 1" in printed and "mm" in printed
 
 
+def marker_frame(markers):
+    """A white picture with markers pasted in: (id, centre_x, centre_y), each 60 pixels wide."""
+    image = np.full((480, 640, 3), 255, dtype=np.uint8)
+    dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+    for marker_id, cx, cy in markers:
+        tile = cv2.cvtColor(cv2.aruco.generateImageMarker(dictionary, marker_id, 60), cv2.COLOR_GRAY2BGR)
+        image[cy - 30 : cy + 30, cx - 30 : cx + 30] = tile
+    return image
+
+
+def run_markers(markers, seconds=2.0, config=None):
+    pipeline = Pipeline(config=config)
+    reports, last = [], None
+    for i in range(int(seconds * FPS)):
+        last = pipeline.process(marker_frame(markers), i / FPS)
+        if last.report:
+            reports.append(last.report)
+    return pipeline, last, reports
+
+
+# Marker 5 is a top block resting on bottom block 2 (its marker sits one block height higher), marker 9 is heavy, marker 3 stands alone.
+STACK = [(2, 300, 300), (5, 300, 236), (9, 150, 200), (3, 450, 200)]
+
+
+def test_markers_set_the_scale_from_the_printed_marker_size():
+    pipeline, _, _ = run_markers(STACK)
+
+    assert pipeline.px_per_mm == pytest.approx(2.0, rel=0.05)  # 60 pixels for a 30 mm marker
+
+
+def test_the_top_block_is_picked_before_the_block_it_rests_on():
+    _, last, _ = run_markers(STACK)
+
+    order = [b.id for b in last.result.order]
+    assert order.index(5) < order.index(2)
+
+
+def test_a_heavy_marker_is_left_where_it_is():
+    _, last, reports = run_markers(STACK)
+
+    assert [(item.block.id, item.reason) for item in last.result.left] == [(9, "heavy block")]
+    assert "heavy block" in reports[-1]
+
+
+def test_markers_are_reported_by_their_ids_in_millimetres():
+    _, _, reports = run_markers(STACK)
+
+    assert "block_5" in reports[-1]
+    assert "mm" in reports[-1]
+
+
+def test_a_changed_config_changes_what_the_ids_mean():
+    from aruco import Config
+
+    _, last, _ = run_markers(STACK, config=Config(heavy_marker_ids=(3,), top_marker_ids=(5,)))
+
+    assert [item.block.id for item in last.result.left] == [3]
+
+
+def test_a_marker_that_blinks_out_for_a_moment_does_not_change_the_plan():
+    pipeline = Pipeline()
+    for i in range(60):
+        pipeline.process(marker_frame(STACK), i / FPS)
+
+    gap = pipeline.process(marker_frame([m for m in STACK if m[0] != 3]), 60 / FPS)
+
+    assert 3 in [b.id for b in gap.result.order]
+
+
+def test_with_no_markers_in_view_the_red_blocks_are_used():
+    _, last, _ = run_pipeline()
+
+    assert len(last.result.order) == 3
+
+
 class DeadCamera:
     """A network camera that never answers. No real connection is made."""
 

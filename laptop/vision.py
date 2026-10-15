@@ -9,16 +9,18 @@ Usage:
 Press ESC in the video window to quit.
 
 What it does each frame:
-- finds red blocks, tracks them so each keeps an id, and sorts them with planner.plan()
+- reads the ArUco marker on each block (aruco.py): id, top or bottom layer, heavy or light, and
+  which bottom block a top block rests on. With no marker in view it falls back to red blocks
+- tracks red blocks so each keeps an id, and sorts them with planner.plan()
 - finds fire (steady bright orange or yellow) and leaves blocks near it alone
 - finds the survivor light separately, as the one thing that PULSES, whatever its colour,
   and never counts a light at that spot as fire
 
 Known limits (see docs/tasks.md for who owns the fix):
-- Blocks are found by colour (red). Shape filters and --masks help, but colour is still
-  fragile in a dim room. ArUco markers are the planned replacement.
-- Colour cannot say which block is on top of which, so every block is layer 1 and nothing
-  rests on anything yet. The top-first rule needs the layer from the markers.
+- Without markers, blocks are found by colour (red), which is fragile in a dim room, and
+  every block is layer 1 with nothing resting on anything. Use markers for real runs.
+- A bottom block whose marker is hidden by the block on top is not seen. Put the markers on
+  the side faces the camera looks at.
 - Coordinates are image pixels until the calibration tool maps them to millimetres.
 - The survivor light needs about 1.5 seconds of video to be recognised, because it is
   found by its pulsing. Until then a bright orange light could briefly look like fire.
@@ -35,11 +37,12 @@ from typing import Optional, Sequence, Union
 import cv2
 import numpy as np
 
+from aruco import Config, Marker, MarkerTracker, blocks_from_markers, find_markers, load_config
 from models import Block, HeatZone
 from planner import PlanResult
 from route import RoutePlan
-from scale import ScaleEstimator, block_size_ok
-from scene import build_scene, decide, path_in_px, view_in_px
+from scale import ScaleEstimator, block_size_ok, to_mm
+from scene import build_scene, decide, path_in_px, scene_from_blocks, view_in_px
 from stream import FrameSource
 
 Point = tuple[int, int]
@@ -406,17 +409,29 @@ class Pipeline:
     scale from the 40 mm blocks, work in millimetres, plan, and draw the answer. It takes a
     picture and a clock reading (seconds) so it can be tested without a camera or a window."""
 
-    def __init__(self) -> None:
+    def __init__(self, config: Optional[Config] = None) -> None:
+        self._config = config if config is not None else Config()
         self._block_tracker = Tracker()
         self._heat_tracker = Tracker()
+        self._marker_tracker = MarkerTracker()
         self._survivor_finder = SurvivorFinder()
-        self._scale = ScaleEstimator()
+        self._scale = ScaleEstimator(block_mm=self._config.block_mm)
+        self._marker_scale = ScaleEstimator(block_mm=self._config.marker_mm)
+        self._using_markers = False
         self._last_signature: Optional[tuple] = None
         self._started_at: Optional[float] = None
 
     @property
     def px_per_mm(self) -> Optional[float]:
-        return self._scale.px_per_mm
+        return (self._marker_scale if self._using_markers else self._scale).px_per_mm
+
+    def _blocks_from_markers(
+        self, markers: Sequence[Marker], origin: tuple[float, float], px_per_mm: float
+    ) -> tuple[Block, ...]:
+        in_mm = [
+            Marker(m.id, *to_mm((m.x, m.y), origin, px_per_mm), m.side / px_per_mm) for m in markers
+        ]
+        return blocks_from_markers(in_mm, self._config.rules, self._config.block_mm)
 
     def process(self, frame: np.ndarray, now: float) -> FrameResult:
         height, width = frame.shape[:2]
@@ -433,23 +448,37 @@ class Pipeline:
 
         # The blocks are 40 mm cubes: how big they look sets the scale, and anything the wrong
         # size for a block is then ignored.
-        blobs = find_blobs(blocks_mask, MIN_BLOCK_AREA, MAX_BLOCK_AREA, MAX_BLOCK_ASPECT)
-        px_per_mm = self._scale.update([b.side for b in blobs])
+        # ArUco markers come first: they give each block its id, layer and weight. Red blobs
+        # are the fallback while no marker is in view.
+        markers = self._marker_tracker.update(find_markers(frame))
+        self._using_markers = bool(markers)
+        if self._using_markers:
+            px_per_mm = self._marker_scale.update([m.side for m in markers])
+            blobs: list[Blob] = []
+        else:
+            blobs = find_blobs(blocks_mask, MIN_BLOCK_AREA, MAX_BLOCK_AREA, MAX_BLOCK_ASPECT)
+            px_per_mm = self._scale.update([b.side for b in blobs])
         if px_per_mm is None:
             shown = frame.copy()
-            cv2.putText(shown, "Measuring the 40 mm blocks to set the scale...", (10, 25),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, CYAN, 2)
+            cv2.putText(shown, f"Measuring the {self._config.block_mm:g} mm blocks to set the scale...",
+                        (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, CYAN, 2)
             return FrameResult(shown, blocks_mask, heat_mask, None, None)
 
         block_tracks = self._block_tracker.update(
-            [(b.x, b.y) for b in blobs if block_size_ok(b.side, px_per_mm)]
+            [(b.x, b.y) for b in blobs if block_size_ok(b.side, px_per_mm, self._config.block_mm)]
         )
         fire_centres = find_blob_centres(heat_mask, MIN_FIRE_AREA)
         if survivor is not None:
             fire_centres = exclude_near(fire_centres, survivor, SURVIVOR_EXCLUDE_RADIUS_PX)
         heat_tracks = self._heat_tracker.update(fire_centres)
 
-        scene = build_scene(block_tracks, heat_tracks, survivor, origin, px_per_mm)
+        if self._using_markers:
+            scene = scene_from_blocks(
+                self._blocks_from_markers(markers, origin, px_per_mm),
+                heat_tracks, survivor, origin, px_per_mm,
+            )
+        else:
+            scene = build_scene(block_tracks, heat_tracks, survivor, origin, px_per_mm)
         result = decide(scene)
 
         # Report the plan only once the survivor search has had time to rule out its own light.
@@ -493,7 +522,11 @@ def run(source: str = "0", show_masks: bool = False) -> int:
         max_reconnects=0 if is_file else MAX_RECONNECTS,  # a finished file is not reopened
         sleep=time.sleep,
     )
-    pipeline = Pipeline()
+    try:
+        pipeline = Pipeline(load_config())
+    except ValueError as error:
+        print(f"Config problem: {error}", file=sys.stderr)
+        return 1
     clock = _clock_for(source)
 
     print("--- Rover vision and planning started (ESC to quit) ---", flush=True)

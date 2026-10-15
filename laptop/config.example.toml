@@ -7,7 +7,9 @@ stream_path = "/stream"
 
 [blocks]
 size_mm = 40               # the blocks are 40 mm cubes
+marker_mm = 30             # printed side of the ArUco marker on a block face (must fit on the block)
 heavy_marker_ids = [9]     # markers that mean "heavy / load-bearing"
+top_marker_ids = [5, 6, 7, 8]  # markers on top-layer blocks; every other id is a bottom block
 
 [survivor_light]
 pulse_hz = 1.5             # expected pulse rate of the survivor LED
