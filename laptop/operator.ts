@@ -103,8 +103,9 @@ function render(state: State): void {
 async function refresh(): Promise<void> {
   try {
     render(await call<State>("/api/state", "GET"));
-  } catch {
-    setStatus("Not connected. Start the server with: python server.py", "warn");
+  } catch (error) {
+    const refused = error instanceof Error && error.message.includes("access link");
+    setStatus(refused ? error.message : "Not connected. Start the server with: python server.py", "warn");
     approve.disabled = true;
     stop.disabled = true;
   }

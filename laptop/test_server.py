@@ -521,3 +521,131 @@ def test_a_bad_rover_argument_is_explained(rover):
 
     with pytest.raises(ValueError, match="--rover"):
         server.choose_rover(False, rover, None, Config())
+
+
+def test_the_servers_own_api_documentation_pages_are_not_published():
+    client = TestClient(server.create_app(source=None))
+
+    for path in ("/docs", "/redoc", "/openapi.json"):
+        assert client.get(path).status_code == 404, path
+
+
+# --- running over Wi-Fi: an access token for anything that is not this laptop ------------------
+
+TOKEN = "s3cret-token"
+
+
+def token_app(written=None):
+    return server.create_app(source=None, access_token=TOKEN, report_writer=written or (lambda *a: None))
+
+
+def test_without_a_token_configured_everyone_is_let_in_as_before(client):
+    assert client.get("/api/state").status_code == 200
+
+
+def test_another_device_without_the_token_is_refused_everywhere_that_matters():
+    client = TestClient(token_app())
+
+    assert client.get("/api/state").status_code == 401
+    assert client.get("/api/report").status_code == 401
+    assert client.get("/video").status_code == 401
+    assert client.post("/api/manual/drive", json={"left": 1, "right": 1}, headers=LOCAL).status_code == 401
+    assert client.post("/api/abort", headers=LOCAL).status_code == 401
+    assert "access link" in client.get("/api/state").json()["detail"]
+
+
+def test_a_wrong_token_is_refused():
+    client = TestClient(token_app())
+
+    assert client.get("/api/state", headers={"x-still-here-token": "nope"}).status_code == 401
+    client.cookies.set("still_here_token", "nope")
+    assert client.get("/api/state").status_code == 401
+
+
+def test_the_right_token_in_a_header_or_a_cookie_is_let_in():
+    client = TestClient(token_app())
+
+    assert client.get("/api/state", headers={"x-still-here-token": TOKEN}).status_code == 200
+    client.cookies.set("still_here_token", TOKEN)
+    assert client.get("/api/state").status_code == 200
+
+
+def test_opening_the_access_link_remembers_the_token_and_shows_a_clean_address():
+    client = TestClient(token_app())
+
+    first = client.get(f"/autonomous.html?token={TOKEN}", follow_redirects=False)
+
+    assert first.status_code in (302, 307)
+    assert first.headers["location"] == "/autonomous.html"
+    cookie = first.headers["set-cookie"].lower()
+    assert "httponly" in cookie and "samesite=strict" in cookie
+    assert client.get("/api/state").status_code == 200  # the cookie was kept
+
+
+def test_the_front_door_with_the_token_goes_to_the_autonomous_page_signed_in():
+    client = TestClient(token_app())
+
+    response = client.get(f"/?token={TOKEN}", follow_redirects=False)
+
+    assert response.headers["location"] == "/autonomous.html"
+    assert "still_here_token" in response.headers["set-cookie"]
+
+
+def test_a_wrong_token_in_the_link_gets_no_cookie():
+    client = TestClient(token_app())
+
+    response = client.get("/autonomous.html?token=wrong", follow_redirects=False)
+
+    assert "set-cookie" not in response.headers
+    assert client.get("/api/state").status_code == 401
+
+
+def test_the_pages_themselves_are_open_so_a_phone_can_load_them_and_explain():
+    client = TestClient(token_app())
+
+    assert client.get("/autonomous.html").status_code == 200
+    assert client.get("/operator.js").status_code == 200
+
+
+def test_this_laptop_never_needs_the_token():
+    client = TestClient(token_app(), client=("127.0.0.1", 50000))
+
+    assert client.get("/api/state").status_code == 200
+    assert client.post("/api/manual/stop", headers=LOCAL).status_code == 200
+
+
+def test_a_page_from_another_website_is_still_refused_even_with_the_token():
+    client = TestClient(token_app())
+
+    response = client.get("/api/state", headers={"x-still-here-token": TOKEN, "origin": "https://evil.example"})
+
+    assert response.status_code == 403
+
+
+def test_the_token_is_only_made_when_the_server_is_open_to_the_network():
+    assert server.access_token_for("127.0.0.1", None) is None
+    assert server.access_token_for("localhost", None) is None
+    open_token = server.access_token_for("0.0.0.0", None)
+    assert open_token and len(open_token) >= 10
+    assert server.access_token_for("0.0.0.0", None) != open_token  # a new one each time
+    assert server.access_token_for("0.0.0.0", "mine") == "mine"
+    assert server.access_token_for("127.0.0.1", "mine") == "mine"
+
+
+def test_the_laptops_address_on_the_network_is_found_or_falls_back_to_this_machine():
+    class Probe:
+        def __init__(self, address):
+            self.address = address
+
+        def connect(self, target):
+            if self.address is None:
+                raise OSError("no network")
+
+        def getsockname(self):
+            return (self.address, 12345)
+
+        def close(self):
+            pass
+
+    assert server.lan_address(lambda: Probe("192.168.0.20")) == "192.168.0.20"
+    assert server.lan_address(lambda: Probe(None)) == "127.0.0.1"

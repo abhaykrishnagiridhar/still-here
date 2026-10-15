@@ -363,8 +363,7 @@
     landing.css, landing.js  Site styling and the animated scene
     models.py                Frozen data types: Block, HeatZone, PlanStep, Plan
     test_models.py           Tests for the data types
-    config.example.toml      Rover IP, block size, pulse rate, pass thresholds
-    perception.py *          Pulsing light, ArUco blocks, layer order, heat
+    config.example.toml      Rover name, buggy size, block size, marker ids, pulse rate, pass thresholds
     planner.py               Top-first pick order, skip heavy blocks, avoid heat
     test_planner.py          Tests for the planner
     route.py                 Which blocks to remove to reach the survivor: cheapest route, heavy blocks and heat avoided
@@ -401,7 +400,6 @@
     test_manual.py, test_marker_sheet.py, test_ui_build.py  Tests for manual control, markers and the page build
     plan_message.py          Builds and checks the messages sent to the rover (whole-number plan ids)
     report.py                Fact-first run report, with a summary only from an allowed list, and a chime
-    run.py                   Console run of the same protocol steps against a rover link you supply
     calibrate.py             Camera calibration: picture pixels to millimetres on the table (perspective fit)
     calibration_points.example.json  An example points file for calibrate.py (replace with measured points)
     trial_log.py             Logs the two-block stack test to docs/trials.csv and checks the 8 of 10 gate
@@ -412,22 +410,20 @@
     test_scenario_runner.py  Tests for the scenario runner
     test_plan_message.py     Tests for the messages
     test_report.py           Tests for the report
-    test_run.py              Tests for the console run
     origin_guard.py          Only local pages may press the buttons
     test_server.py           Tests for the server
     test_operator.py         Tests for the operator logic
     test_origin_guard.py     Tests for the origin rule
+    test_rover_control.py    Tests for the hand-driving console in firmware/
   firmware/
-    main.cpp                 Boot stub, grows into the rover loop
+    main.cpp                 Joins Wi-Fi, starts the camera and the video server; the rover loop grows from here
     pins.h                   Pin map for the ESP32-S3 board: camera confirmed, the rest untested
     platformio.ini           ESP32-S3 N16R8 build settings
     rover_sketch.txt         Earlier all-in-one rover sketch, reference only, not built
     cam_probe.txt            Camera sensor probe for the S3 board, paste into the Arduino IDE
     cam_scan.txt             Full camera pin scan, for when the probe finds no known map
     bringup.txt              Bench test for servos, wheels, sensors and battery, paste into the Arduino IDE
-    esp32cam_stream.txt      Old AI-Thinker ESP32-CAM streaming sketch, reference only, not built
-    cam_stream.txt           GC2145 ESP32-CAM streaming sketch, reference only, not built
-    rover_control.py         Menu client for the rover (uses the older command set, see docs/protocol.md)
+    rover_control.py         Console for driving the rover by hand with the protocol messages, through the same link as the server
     camera.h, camera.cpp     GC2145 camera: raw pictures turned into JPEG on the chip
     mjpeg_server.h, .cpp     Video over Wi-Fi: /stream (MJPEG), /capture (one picture)
     link.cpp *               WebSocket server, link-loss handling

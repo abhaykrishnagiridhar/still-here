@@ -55,3 +55,17 @@ Defined in `laptop/models.py`. Fields the planner depends on:
 - `Block`: `id`, `marker_id`, `x`, `y`, `layer` (1 = bottom, 2 = top), `weight_class` (`light` or `heavy`), `load_bearing`, `supports` (ids of blocks resting on it)
 - `HeatZone`: `x`, `y`, `radius`
 - `Plan`: `plan_id`, ordered `steps`
+
+## Proposed clarifications (all four must agree before the draft above changes)
+
+Nothing above is changed. These describe what the laptop code and the software rover (`laptop/sim_rover.py`) already do, written down so the firmware can match them exactly. Each one is tested on the laptop side.
+
+1. **`plan_id` is a positive whole number**, as in `models.Plan`. A text id such as `"run-001"` is refused by the rover as `bad_plan`.
+2. **Confirming a plan.** After a `plan` message the rover answers `event: plan_stored`, and its next `state` messages carry that `plan_id`. The laptop sends `plan_start` only when it sees a `state` with the same `plan_id`. If none arrives within 3 seconds it sends `abort` and tells the operator. (This is what "receive an `ok` state" means in practice.)
+3. **Event codes in use.** `plan_stored` (`detail`: "N steps"), `bad_plan`, `aborted`, `link_lost`, `link_restored`, `plan_finished`. If the plan finished while the link was down, `plan_finished` is sent after `link_restored`.
+4. **`step_done.reason`** when `ok` is false: `unreachable` (the pose cannot be reached) or `no block under the gripper`. When `ok` is true it is an empty string.
+5. **Manual commands during a plan.** While a stored plan is running, `drive` and `arm_pose` are ignored. `abort` always works.
+6. **Missing sensors.** The right flame sensor and the DHT11 have no pin yet. The rover should send `null` for a reading it cannot take. The laptop treats `null` as unknown.
+7. **Who may connect.** The rover refuses a WebSocket connection whose `Origin` header names a site outside this machine or the local network (the same rule as `laptop/origin_guard.py`), and serves one operator at a time. Without this, any web page open on the same Wi-Fi could try to drive the rover.
+8. **The rover's name.** It announces itself on the network as `still-here` (mDNS), so the laptop reaches it at `still-here.local`, port 81 for commands and port 80 for `/stream`.
+9. **Limits.** Joint ranges are as in `laptop/plan_message.py` (`ARM_LIMITS_DEG`); the firmware should refuse anything outside them. The elbow reaches 135 degrees each way.

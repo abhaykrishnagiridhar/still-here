@@ -7,13 +7,11 @@ from planner import plan
 from vision import (
     SurvivorFinder,
     Tracker,
-    blocks_from_tracks,
     describe_plan,
     draw_overlay,
     exclude_near,
     find_blob_centres,
     fire_mask,
-    heat_zones_from_tracks,
     parse_args,
     plan_signature,
     red_mask,
@@ -133,18 +131,6 @@ def test_a_new_blob_far_away_is_a_new_block_not_the_old_one_moving():
 
     assert len(both) == 2
     assert old[0].id in {t.id for t in both}
-
-
-def test_tracks_become_blocks_and_heat_zones():
-    tracker = Tracker(confirm_frames=1)
-    tracks = tracker.update([(10, 20)])
-
-    blocks = blocks_from_tracks(tracks)
-    zones = heat_zones_from_tracks(tracks, radius=120.0)
-
-    assert isinstance(blocks[0], Block)
-    assert (blocks[0].x, blocks[0].y) == (10.0, 20.0)
-    assert (zones[0].x, zones[0].y, zones[0].radius) == (10.0, 20.0, 120.0)
 
 
 def test_the_plan_signature_ignores_small_position_changes():
@@ -276,9 +262,7 @@ def test_command_line_options():
 
 def test_drawing_the_overlay_returns_a_new_frame_and_leaves_the_original_alone():
     frame = canvas()
-    tracker = Tracker(confirm_frames=1)
-    tracks = tracker.update([(100, 100)])
-    result = plan(blocks_from_tracks(tracks))
+    result = plan([Block(id=1, marker_id=1, x=100.0, y=100.0, layer=1)])
 
     drawn = draw_overlay(frame, result, [])
 

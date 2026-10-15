@@ -7,6 +7,8 @@ Run it from the laptop folder:
     python server.py 1                     use webcam 1 for the picture instead of the rover's stream
     python server.py clip.avi --simulate   the software rover and a recorded clip, no hardware
 Then open http://127.0.0.1:8000/ (autonomous) or http://127.0.0.1:8000/control.html (manual).
+For a phone or another laptop on the same Wi-Fi add --host 0.0.0.0: the server prints an access link
+with a token; open it once on that device. This laptop never needs the token, other devices do.
 
 The rover's name, port and stream path come from config.toml ([rover]); the rover firmware is
 expected to announce the name still-here on the network. If the rover cannot be reached, the pages
@@ -18,6 +20,8 @@ server listens on this machine only unless you pass --host.
 """
 
 import argparse
+import secrets
+import socket
 import sys
 import threading
 import time
@@ -55,6 +59,10 @@ STEP_S = 0.05  # how often the simulated rover is advanced
 PING_S = 0.5
 JPEG_QUALITY = 80
 REPORT_FILE = LAPTOP_DIR / "safe_path_report.json"  # git-ignored; rewritten when a run ends
+TOKEN_COOKIE = "still_here_token"
+TOKEN_HEADER = "x-still-here-token"
+TOKEN_LIFETIME_S = 12 * 3600
+LOOPBACK_HOSTS = ("127.0.0.1", "::1", "localhost")
 FILE_FRAME_S = 1 / 30  # a video file is played at about 30 pictures a second
 
 
@@ -168,6 +176,7 @@ def create_app(
     calibration: Optional[Calibration] = None,
     manual_clock: Callable[[], float] = time.monotonic,
     link: Optional[Link] = None,
+    access_token: Optional[str] = None,
 ) -> FastAPI:
     """Build the server. With a source it also reads that camera once it is started; with
     none (as in tests) nothing runs in the background."""
@@ -202,9 +211,35 @@ def create_app(
                 "It stops by itself when it hears nothing for 2 seconds.",
             )
 
+    def has_access(request: Request) -> bool:
+        """Open to anyone when no token is set. With one, only this laptop, or a device that
+        brought the token (in the cookie the access link sets, or in a header), gets in."""
+        if access_token is None:
+            return True
+        if request.client is not None and request.client.host in LOOPBACK_HOSTS:
+            return True
+        supplied = request.cookies.get(TOKEN_COOKIE) or request.headers.get(TOKEN_HEADER) or ""
+        return secrets.compare_digest(supplied.encode(), access_token.encode())
+
+    def require_token(request: Request) -> None:
+        if not has_access(request):
+            raise HTTPException(
+                status_code=401,
+                detail="This page needs the access link the server printed when it started. Open that link once.",
+            )
+
     def guard(request: Request) -> None:
         if not origin_allowed(request.headers.get("origin")):
             raise HTTPException(status_code=403, detail="This page may not control the rover.")
+        require_token(request)
+
+    def sign_in(request: Request, target: str) -> RedirectResponse:
+        """Go to the page at its clean address, remembering the token if the link carried the right one."""
+        response = RedirectResponse(target)
+        offered = request.query_params.get("token")
+        if access_token is not None and offered and secrets.compare_digest(offered.encode(), access_token.encode()):
+            response.set_cookie(TOKEN_COOKIE, access_token, httponly=True, samesite="strict", max_age=TOKEN_LIFETIME_S)
+        return response
 
     def run_rover() -> None:
         while not stop.is_set():
@@ -249,7 +284,7 @@ def create_app(
         if closer is not None:
             closer()
 
-    app = FastAPI(title="STILL HERE operator", lifespan=lifespan)
+    app = FastAPI(title="STILL HERE operator", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.source = source
     app.state.operator = operator
     app.state.capture = capture
@@ -258,10 +293,10 @@ def create_app(
     app.state.manual = manual
 
     @app.get("/")
-    def root() -> RedirectResponse:
-        return RedirectResponse("/autonomous.html")
+    def root(request: Request) -> RedirectResponse:
+        return sign_in(request, "/autonomous.html")
 
-    @app.get("/video")
+    @app.get("/video", dependencies=[Depends(require_token)])
     def video() -> StreamingResponse:
         chunks = mjpeg_chunks(capture.latest_jpeg, stop.is_set, lambda: time.sleep(STEP_S))
         return StreamingResponse(chunks, media_type="multipart/x-mixed-replace; boundary=frame")
@@ -342,12 +377,36 @@ def create_app(
             return refused_or_ok(manual.stop())
 
     @app.get("/{name}")  # last, so it never shadows the routes above
-    def page(name: str) -> FileResponse:
+    def page(name: str, request: Request):
         if name not in PAGES:
             raise HTTPException(status_code=404)
+        if request.query_params.get("token"):
+            return sign_in(request, f"/{name}")  # an access link: remember the token, show the clean address
         return FileResponse(LAPTOP_DIR / name)
 
     return app
+
+
+def access_token_for(host: str, explicit: Optional[str]) -> Optional[str]:
+    """A server open to the network gets an access token (a new one each start unless you give one).
+    One that listens on this laptop only needs none, because nothing else can reach it."""
+    if explicit:
+        return explicit
+    if host in LOOPBACK_HOSTS:
+        return None
+    return secrets.token_urlsafe(9)
+
+
+def lan_address(make_socket: Optional[Callable] = None) -> str:
+    """This laptop's address on the Wi-Fi, found without sending anything, or 127.0.0.1."""
+    probe = (make_socket or (lambda: socket.socket(socket.AF_INET, socket.SOCK_DGRAM)))()
+    try:
+        probe.connect(("10.255.255.255", 1))  # a UDP connect sends nothing: it only picks the network card
+        return probe.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
+    finally:
+        probe.close()
 
 
 def choose_rover(
@@ -376,7 +435,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("source", nargs="?", help="webcam number, stream URL or video file (default: the rover's own stream)")
     parser.add_argument("--rover", help="the rover's name or address, optionally with a port (default: config.toml, normally still-here.local)")
     parser.add_argument("--simulate", action="store_true", help="use the software rover and a webcam, with no real rover")
-    parser.add_argument("--host", default="127.0.0.1", help="use 0.0.0.0 to open it to the local network")
+    parser.add_argument("--host", default="127.0.0.1", help="use 0.0.0.0 to open the pages to phones and other laptops on the same Wi-Fi")
+    parser.add_argument("--token", help="the access token for devices other than this laptop (default: a new one each start)")
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
     try:
@@ -395,9 +455,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 1
     print(f"Rover: {link.address}" if link is not None else "Rover: the simulated rover (--simulate)")
     print(f"Camera: {source}")
+    token = access_token_for(args.host, args.token)
+    print(f"On this laptop:  http://127.0.0.1:{args.port}/")
+    if token is not None:
+        address = lan_address() if args.host in ("0.0.0.0", "::") else args.host
+        print("On a phone or another laptop on the same Wi-Fi, open this access link once:")
+        print(f"  http://{address}:{args.port}/?token={token}")
+        print("Anyone with that link can drive the rover, so share it only with your team. It changes each time the server starts,")
+        print("and it is plain http, so use a network you trust, such as your own phone hotspot.")
     import uvicorn
 
-    uvicorn.run(create_app(source, config, calibration=calibration, link=link), host=args.host, port=args.port)
+    uvicorn.run(
+        create_app(source, config, calibration=calibration, link=link, access_token=token), host=args.host, port=args.port
+    )
     return 0
 
 

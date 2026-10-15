@@ -2,13 +2,13 @@
 name = "still-here-laptop"
 version = "0.1.0"
 description = "Vision, planner and API server for the STILL HERE rescue rover"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
-    "numpy",
-    "opencv-contrib-python",
-    "fastapi",
+    "numpy>=1.26",
+    "opencv-contrib-python>=4.8",
+    "fastapi>=0.110",
     "uvicorn[standard]",
-    "websockets",
+    "websockets>=14",
 ]
 
 [project.optional-dependencies]
@@ -16,7 +16,7 @@ dev = ["pytest", "pytest-cov", "httpx2"]
 firmware = ["platformio", "esptool", "pyserial"]
 
 [tool.setuptools]
-py-modules = ["aruco", "calibrate", "gyro_map", "manual_core", "marker_sheet", "models", "operator_core", "origin_guard", "plan_message", "planner", "report", "rover_link", "route", "run", "scale", "scenario_runner", "scene", "scene_watch", "server", "sim_rover", "sim_server", "stream", "trial_log", "vision"]
+py-modules = ["aruco", "calibrate", "gyro_map", "manual_core", "marker_sheet", "models", "operator_core", "origin_guard", "plan_message", "planner", "report", "rover_link", "route", "scale", "scenario_runner", "scene", "scene_watch", "server", "sim_rover", "sim_server", "stream", "trial_log", "vision"]
 
 [tool.pytest.ini_options]
 testpaths = ["."]

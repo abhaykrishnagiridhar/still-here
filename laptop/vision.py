@@ -3,7 +3,7 @@
 Usage:
     python vision.py                                webcam 0
     python vision.py 1                              webcam 1
-    python vision.py http://192.168.0.50/stream     the rover's camera stream
+    python vision.py http://still-here.local/stream    the rover's camera stream
     python vision.py 0 --masks                      also show what the colour detectors see
 
 Press ESC in the video window to quit.
@@ -55,7 +55,6 @@ MIN_BLOCK_AREA = 400.0  # pixels; smaller red blobs are noise
 MAX_BLOCK_AREA = 30000.0  # pixels; bigger red regions, such as a table, are not blocks
 MAX_BLOCK_ASPECT = 2.0  # a block's bounding box is never more than this much longer than wide
 MIN_FIRE_AREA = 800.0  # pixels; smaller bright blobs are not a fire
-HEAT_RADIUS_PX = 120.0  # blocks closer than this to a fire are left alone
 MAX_FAILED_READS = 30  # blank frames in a row before the stream is reopened
 MAX_RECONNECTS = 5  # times a dropped network camera is reopened before giving up
 CONFIRM_FRAMES = 3  # frames in a row before a blob is believed
@@ -296,19 +295,6 @@ class SurvivorFinder:
         bright = series > (low + high) / 2
         crossings = int(np.count_nonzero(bright[1:] != bright[:-1]))
         return crossings >= self._min_crossings
-
-
-def blocks_from_tracks(tracks: Sequence[Track]) -> tuple[Block, ...]:
-    """Colour cannot tell layers or weights apart yet, so every block is a light layer-1 block."""
-    return tuple(
-        Block(id=t.id, marker_id=t.id, x=float(t.x), y=float(t.y), layer=1) for t in tracks
-    )
-
-
-def heat_zones_from_tracks(
-    tracks: Sequence[Track], radius: float = HEAT_RADIUS_PX
-) -> tuple[HeatZone, ...]:
-    return tuple(HeatZone(x=float(t.x), y=float(t.y), radius=radius) for t in tracks)
 
 
 def describe_plan(

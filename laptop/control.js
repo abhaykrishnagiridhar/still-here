@@ -119,8 +119,9 @@ async function poll()                {
     } else if (statusLine.dataset.tone === "warn" && /plan is running|Not connected to the rover/.test(statusLine.textContent ?? "")) {
       say("Ready. Hold a button or W A S D to drive.");
     }
-  } catch {
-    say("Not connected. Start the server with: python server.py", true);
+  } catch (error) {
+    const refused = error instanceof Error && error.message.includes("access link");
+    say(refused ? error.message : "Not connected. Start the server with: python server.py", true);
   }
 }
 

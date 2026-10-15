@@ -90,6 +90,8 @@ The full blueprint, including the team diagram and what can be cut, is in [docs/
 still-here/
   README.md                  What it is, the 8/10 gate, team rules, quick start
   .gitignore                 Keeps firmware/secrets.h and laptop/config.toml out of git
+  .gitattributes             Unix line endings everywhere, so git stops printing line-ending warnings
+  pytest.ini                 Makes pytest from the repo root run only laptop/ and simulation/
   vision.cpp                 C++ camera demo (scale, mm, fire); laptop/vision.py is the full version
   planner.hpp, perception.hpp  OpenCV-free logic for vision.cpp
   test_planner.cpp, test_perception.cpp  Tests for those headers
@@ -112,8 +114,10 @@ still-here/
     models.py                Frozen data types: Block, HeatZone, PlanStep, Plan
     test_models.py           Tests for the data types
     pyproject.toml           Python dependencies (OpenCV, FastAPI, pytest)
-    config.example.toml      Rover IP, block size, pulse rate, pass thresholds
-    perception.py *          Pulsing light, ArUco blocks, layer order, heat
+    config.example.toml      Rover name, buggy size, block size, marker ids, pulse rate, pass thresholds
+    index.html, terms.html, privacy.html, blueprint.html  The project site
+    autonomous.html, control.html  The two operator pages (loaded with operator.js, control.js)
+    landing.css, landing.js, operator.css  Their style and the landing page script
     planner.py               Top-first pick order, skip heavy blocks, avoid heat
     test_planner.py          Tests for the planner
     route.py                 Which blocks to remove to reach the survivor: cheapest route, heavy blocks and heat avoided
@@ -150,7 +154,6 @@ still-here/
     test_manual.py, test_marker_sheet.py, test_ui_build.py  Tests for manual control, markers and the page build
     plan_message.py          Builds and checks the messages sent to the rover (whole-number plan ids)
     report.py                Fact-first run report, with a summary only from an allowed list, and a chime
-    run.py                   Console run of the same protocol steps against a rover link you supply
     calibrate.py             Camera calibration: picture pixels to millimetres on the table (perspective fit)
     calibration_points.example.json  An example points file for calibrate.py (replace with measured points)
     trial_log.py             Logs the two-block stack test to docs/trials.csv and checks the 8 of 10 gate
@@ -161,13 +164,13 @@ still-here/
     test_scenario_runner.py  Tests for the scenario runner
     test_plan_message.py     Tests for the messages
     test_report.py           Tests for the report
-    test_run.py              Tests for the console run
     origin_guard.py          Only local pages may press the buttons
     test_server.py           Tests for the server
     test_operator.py         Tests for the operator logic
     test_origin_guard.py     Tests for the origin rule
+    test_rover_control.py    Tests for the hand-driving console in firmware/
   firmware/
-    main.cpp                 Boot stub, grows into the rover loop
+    main.cpp                 Joins Wi-Fi, starts the camera and the video server; the rover loop grows from here
     pins.h                   Pin map for the ESP32-S3 board: camera confirmed, the rest untested
     platformio.ini           ESP32-S3 N16R8 build settings, flat layout
     secrets.example.h        Wi-Fi template for the 2.4 GHz phone hotspot
@@ -175,9 +178,7 @@ still-here/
     cam_probe.txt            Camera sensor probe for the S3 board, paste into the Arduino IDE
     cam_scan.txt             Full camera pin scan, for when the probe finds no known map
     bringup.txt              Bench test for servos, wheels, sensors and battery, paste into the Arduino IDE
-    esp32cam_stream.txt      Old AI-Thinker ESP32-CAM streaming sketch, reference only, not built
-    cam_stream.txt           GC2145 ESP32-CAM streaming sketch, reference only, not built
-    rover_control.py         Menu client for the rover (uses the older command set, see docs/protocol.md)
+    rover_control.py         Console for driving the rover by hand with the protocol messages, through the same link as the server
     camera.h, camera.cpp     GC2145 camera: raw pictures turned into JPEG on the chip
     mjpeg_server.h, .cpp     Video over Wi-Fi: /stream (MJPEG), /capture (one picture)
     link.cpp *               WebSocket server, link-loss handling
@@ -193,10 +194,6 @@ still-here/
 The **two-block stack test**: on a two-layer stack the camera finds both blocks, software picks the top one, and the clamp removes it without disturbing the other. Run it 10 times and log each run in `docs/trials.csv`. If fewer than 8 pass, fix grip padding, block weight and camera placement, in that order, before any other feature.
 
 Pass rule: the bottom block moves less than 5 mm and rotates less than 10 degrees (measured from its marker before and after).
-
-## If the camera is an AI-Thinker ESP32-CAM with a GC2145
-
-The main design uses the ESP32-S3 board with its built-in camera, and `firmware/camera.cpp` serves the video. If you ever use a separate AI-Thinker ESP32-CAM instead, check its sensor first: some have a **GC2145**, not the usual OV2640. A GC2145 cannot make JPEGs itself, so the sketch captures small RGB565 pictures and converts each to JPEG on the chip. Update the Espressif board package first (an old one fails with `ESP_ERR_NOT_SUPPORTED`), do not use the default `CAMERA_MODEL_AI_THINKER` settings, and use 2.4 GHz Wi-Fi. A working example is kept in `firmware/cam_stream.txt`, with the steps in its header. It is reference only and is not built.
 
 ## Phone and Blender digital twin
 
@@ -217,7 +214,7 @@ The wheels stop on a mode switch, when the phone leaves, and when the phone is q
 
 ## Quick start
 
-Laptop (Python 3.10 or newer):
+Laptop (Python 3.11 or newer):
 
 ```bash
 cd laptop
@@ -233,7 +230,7 @@ Run the operator pages (camera, plan, approve, report) and the manual control pa
 python server.py              # the real rover (still-here.local) and its video; --simulate for no hardware
 ```
 
-Then open http://127.0.0.1:8000/ for autonomous mode and http://127.0.0.1:8000/control.html for manual control. While the rover works, the server keeps watching the camera. If a block it has not touched moves, vanishes, or a new one appears, it stops the rover, writes the run up as a safe stop, and offers a fresh plan from the new picture. The rover never carries on with a plan nobody has looked at: you approve the new one. The server finds the rover by its name, `still-here.local` (set in `config.toml`, or pass `--rover <name or address>`), and the rover firmware is expected to announce that name on the network. If the rover cannot be reached the pages say so and send nothing. With no hardware, use `python server.py clip.avi --simulate`, or run `python sim_server.py` in another window (the software rover as a WebSocket server) and start the server with `--rover 127.0.0.1` to try the whole real-rover path.
+Then open http://127.0.0.1:8000/ for autonomous mode and http://127.0.0.1:8000/control.html for manual control. While the rover works, the server keeps watching the camera. If a block it has not touched moves, vanishes, or a new one appears, it stops the rover, writes the run up as a safe stop, and offers a fresh plan from the new picture. The rover never carries on with a plan nobody has looked at: you approve the new one. The server finds the rover by its name, `still-here.local` (set in `config.toml`, or pass `--rover <name or address>`), and the rover firmware is expected to announce that name on the network. If the rover cannot be reached the pages say so and send nothing. To use the pages from a phone or another laptop on the same Wi-Fi, start it with `python server.py --host 0.0.0.0`. It prints an **access link** with a token in it (and your laptop's Wi-Fi address). Open that link once on the other device: it signs you in and then shows a clean address. This laptop never needs the token, but any other device, and any program other than a browser, is refused without it. The token changes each start (or give one with `--token`). The link is plain http, so use a network you trust, such as your own phone hotspot. With no hardware, use `python server.py clip.avi --simulate`, or run `python sim_server.py` in another window (the software rover as a WebSocket server) and start the server with `--rover 127.0.0.1` to try the whole real-rover path.
 
 First-time setup, in this order:
 
@@ -243,6 +240,6 @@ First-time setup, in this order:
 4. **The gate.** Run the two-block stack test 10 times, logging each with `python trial_log.py add ...`, then `python trial_log.py summary`. At least 8 must pass before anything else is built.
 5. **Protocol check.** `python scenario_runner.py` replays a pick and drop on the software rover. With the real rover: `python scenario_runner.py --target real --ip <address> --confirm-real` (lift the wheels first).
 
-The pages are written in TypeScript (`laptop/*.ts`) and built to the plain JavaScript the browser loads. After changing a `.ts` file run `node build.mjs` (Node 22 or newer, nothing to install); the tests fail if the `.js` is out of date. For type checking, `npm install` then `npm run typecheck`.
+The pages are written in TypeScript (`laptop/*.ts`) and built to the plain JavaScript the browser loads. After changing a `.ts` file run `node build.mjs` (Node 22.13 or newer, nothing to install); the tests fail if the `.js` is out of date. For type checking, `npm install` then `npm run typecheck`.
 
 Firmware: install PlatformIO, copy `firmware/secrets.example.h` to `firmware/secrets.h`, fill in `firmware/pins.h`, then `pio run -d firmware`.

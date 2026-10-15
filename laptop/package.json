@@ -1,6 +1,9 @@
 {
   "name": "still-here-ui",
   "private": true,
+  "engines": {
+    "node": ">=22.13"
+  },
   "type": "module",
   "description": "The operator and control pages, written in TypeScript and built to plain JavaScript.",
   "scripts": {
