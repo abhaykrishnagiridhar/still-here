@@ -19,3 +19,7 @@ build*/
 .local-tls/
 .ruff_cache/
 safe_path_report.json
+laptop/calibration.json
+markers.png
+node_modules/
+package-lock.json

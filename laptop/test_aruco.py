@@ -191,3 +191,42 @@ def test_the_tracker_reports_markers_in_id_order():
     out = tracker.update([Marker(8, 0, 0, 50), Marker(3, 0, 0, 50)])
 
     assert [m.id for m in out] == [3, 8]
+
+
+# --- the buggy's size ---------------------------------------------------------------------
+
+
+def test_the_buggy_defaults_are_the_official_size_and_give_a_240_mm_corridor():
+    config = Config()
+
+    assert config.buggy_breadth_mm == 200
+    assert 450 <= config.buggy_length_mm <= 500
+    assert config.corridor_mm == 240  # 200 mm wide plus 20 mm spare each side
+
+
+def test_a_config_file_can_set_the_clearance_and_the_corridor_follows(tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_text("[buggy]\nbreadth_mm = 200\nlength_mm = 480\nclearance_mm = 35\n", encoding="utf-8")
+
+    config = load_config(path)
+
+    assert config.buggy_length_mm == 480
+    assert config.corridor_mm == 270
+
+
+@pytest.mark.parametrize("length", [449, 501, 100, 2000])
+def test_a_length_outside_the_official_450_to_500_is_refused(tmp_path, length):
+    path = tmp_path / "config.toml"
+    path.write_text(f"[buggy]\nlength_mm = {length}\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="length_mm"):
+        load_config(path)
+
+
+@pytest.mark.parametrize("key", ["breadth_mm", "clearance_mm"])
+def test_a_buggy_size_that_is_not_positive_is_refused(tmp_path, key):
+    path = tmp_path / "config.toml"
+    path.write_text(f"[buggy]\n{key} = 0\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=key):
+        load_config(path)

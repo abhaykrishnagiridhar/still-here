@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@200;400;600&display=swap">
   <link rel="stylesheet" href="landing.css?v=4">
+  <link rel="stylesheet" href="operator.css?v=2">
 </head>
 <body>
   <header class="topbar">
@@ -17,11 +18,48 @@
     </a>
   </header>
 
-  <main class="page">
+  <main class="operator">
     <p class="label">Manual mode</p>
-    <h1>Not connected.</h1>
-    <p class="lede">The rover link isn't built yet. The drive and arm controls will appear here once the firmware connection is working.</p>
-    <p><a class="button" href="index.html">Back to the start</a></p>
+    <h1>Drive it yourself.</h1>
+    <p class="status" id="status" role="status" aria-live="polite">Connecting to the server...</p>
+
+    <div class="workspace">
+      <figure class="camera">
+        <img id="video" src="/video" alt="Live camera view from the rover" width="640" height="480">
+        <figcaption>Hold a button, or W A S D or the arrow keys, to drive. Space stops. The rover stops by itself if you let go.</figcaption>
+      </figure>
+
+      <div class="panel">
+        <section aria-labelledby="drive-heading">
+          <h2 id="drive-heading">Drive</h2>
+          <div class="pad" role="group" aria-label="Drive buttons">
+            <button class="pad-key up" type="button" data-dir="forward" aria-label="Forward">Forward</button>
+            <button class="pad-key left" type="button" data-dir="left" aria-label="Turn left">Left</button>
+            <button class="pad-key right" type="button" data-dir="right" aria-label="Turn right">Right</button>
+            <button class="pad-key down" type="button" data-dir="back" aria-label="Reverse">Back</button>
+          </div>
+          <label class="slider" for="speed">Speed <output id="speed-out" for="speed">30%</output></label>
+          <input id="speed" type="range" min="10" max="100" step="5" value="30">
+          <button class="button stop wide" id="stop-now" type="button">Stop the rover</button>
+        </section>
+
+        <section aria-labelledby="arm-heading">
+          <h2 id="arm-heading">Arm</h2>
+          <label class="slider" for="base">Base swing</label>
+          <input id="base" type="range" min="-90" max="90" step="1" value="0">
+          <label class="slider" for="shoulder">Shoulder</label>
+          <input id="shoulder" type="range" min="0" max="120" step="1" value="60">
+          <label class="slider" for="elbow">Elbow</label>
+          <input id="elbow" type="range" min="-135" max="135" step="1" value="-90">
+          <div class="actions">
+            <button class="button ghost" id="grip" type="button" aria-pressed="false">Gripper: open</button>
+            <button class="button ghost" id="arm-home" type="button">Arm to home</button>
+          </div>
+        </section>
+
+        <p><a class="button ghost" href="autonomous.html">Autonomous mode</a></p>
+      </div>
+    </div>
   </main>
 
   <footer class="site-footer">
@@ -32,5 +70,7 @@
       <a href="privacy.html">Privacy</a>
     </nav>
   </footer>
+
+  <script type="module" src="control.js?v=1"></script>
 </body>
 </html>

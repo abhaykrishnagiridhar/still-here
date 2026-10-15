@@ -234,3 +234,71 @@ def test_run_reports_a_source_that_cannot_be_opened(capsys, monkeypatch):
 
     assert code == 1
     assert "video source" in capsys.readouterr().err
+
+
+# --- with a calibration -------------------------------------------------------------------
+
+from calibrate import fit  # noqa: E402
+
+# 2 pixels per millimetre, where the red-block pictures above work out at 1.5: so a calibrated
+# run gives different (and, for this made-up camera, the right) millimetre positions.
+CALIBRATION = fit([
+    [320, 480, 0, 0],
+    [320, 180, 150, 0],
+    [170, 480, 0, 75],
+    [470, 480, 0, -75],
+])
+
+
+def test_red_blocks_are_placed_with_the_calibration_when_there_is_one():
+    pipeline = Pipeline(calibration=CALIBRATION)
+    last = None
+    for i in range(int(2.0 * FPS)):
+        last = pipeline.process(frame_with(), i / FPS)
+
+    middle = min(last.scene.blocks, key=lambda b: abs(b.y))
+    assert (middle.x, middle.y) == pytest.approx(CALIBRATION.to_mm((300, 300)), abs=1.0)
+    flat = Pipeline()
+    for i in range(int(2.0 * FPS)):
+        flat_last = flat.process(frame_with(), i / FPS)
+    flat_middle = min(flat_last.scene.blocks, key=lambda b: abs(b.y))
+    assert middle.x != pytest.approx(flat_middle.x, abs=5.0)
+
+
+def test_markers_are_placed_with_the_calibration_when_there_is_one():
+    pipeline = Pipeline(calibration=CALIBRATION)
+    last = None
+    for i in range(int(2.0 * FPS)):
+        last = pipeline.process(marker_frame(STACK), i / FPS)
+
+    block = next(b for b in last.scene.blocks if b.id == 3)
+    assert (block.x, block.y) == pytest.approx(CALIBRATION.to_mm((450, 200)), abs=1.0)
+
+
+def test_the_calibrated_picture_still_draws_the_plan():
+    pipeline = Pipeline(calibration=CALIBRATION)
+    for i in range(int(2.0 * FPS)):
+        last = pipeline.process(frame_with(), i / FPS)
+
+    assert last.shown.shape == (480, 640, 3)
+    assert last.result is not None
+
+
+# --- the buggy's width reaches the route planner -------------------------------------------
+
+
+def blocks_removed_for(config):
+    pipeline = Pipeline(config)
+    last = None
+    for i in range(int(2.0 * FPS)):
+        last = pipeline.process(frame_with(), i / FPS, survivor_hint=(320, 100))
+    return [b.id for b in last.result.order]
+
+
+def test_a_wider_buggy_has_to_clear_more_blocks_than_a_narrow_one():
+    from aruco import Config
+
+    real_buggy = blocks_removed_for(Config())  # 200 mm wide, so a 240 mm corridor
+    narrow = blocks_removed_for(Config(buggy_breadth_mm=40.0, clearance_mm=10.0))
+
+    assert len(real_buggy) > len(narrow)

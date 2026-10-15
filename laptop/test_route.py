@@ -218,14 +218,16 @@ def test_the_default_bounds_still_let_the_path_go_around_a_block():
 def test_the_default_block_is_40_mm_wide():
     only = block(1)
 
-    result = route([only], (), START, GOAL, bounds=BOUNDS, cell=CELL)  # default block and corridor
+    table = (0.0, -120.0, 400.0, 320.0)  # tall enough to swing round a block the way a 200 mm buggy must
+
+    # Removal is made very expensive so the path has to go round: with a 240 mm corridor a detour
+    # is longer than the default removal cost, so the planner would rather remove the block.
+    result = route([only], (), START, GOAL, bounds=table, cell=CELL, removal_cost=100000.0)
 
     reach = 40.0 / 2 + DEFAULT_CORRIDOR_MM / 2
     assert DEFAULT_BLOCK_SIZE_MM == 40.0
     assert result.ok
-    assert all(
-        not (abs(px - only.x) <= reach and abs(py - only.y) <= reach) for px, py in result.path
-    )
+    assert all(hypot(px - only.x, py - only.y) > reach - 1e-6 for px, py in result.path)  # a round keep-out
 
 
 def test_default_bounds_make_room_for_a_heat_zone_that_sticks_out_past_the_points():

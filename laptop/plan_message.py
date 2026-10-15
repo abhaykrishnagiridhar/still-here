@@ -77,6 +77,39 @@ def build_abort_message() -> dict[str, str]:
     return {"type": "abort"}
 
 
+# Joint limits in degrees, the same as sim_rover.py. The firmware should refuse anything outside them.
+ARM_LIMITS_DEG = {
+    "base": (-90.0, 90.0),
+    "shoulder": (0.0, 120.0),
+    "elbow": (-135.0, 135.0),
+    "gripper": (0.0, 90.0),  # 0 closed, 90 open
+}
+
+
+def _finite(value: Any, name: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value != value or abs(value) == float("inf"):
+        raise ValueError(f"{name} must be a number, got {value!r}")
+    return float(value)
+
+
+def build_drive_message(left: float, right: float) -> dict[str, Any]:
+    """Wheel speeds, each from -1 (full reverse) to 1 (full forward). Out-of-range is clamped."""
+    clamp = lambda v: max(-1.0, min(1.0, v))  # noqa: E731
+    return {"type": "drive", "left": clamp(_finite(left, "left")), "right": clamp(_finite(right, "right"))}
+
+
+def build_arm_pose_message(
+    base: float, shoulder: float, elbow: float, gripper: float, speed: float = 1.0
+) -> dict[str, Any]:
+    """Move the arm to a pose. Each joint is held inside its limits, and speed is 0.05 to 1."""
+    pose = {"base": base, "shoulder": shoulder, "elbow": elbow, "gripper": gripper}
+    out: dict[str, Any] = {"type": "arm_pose"}
+    for joint, (low, high) in ARM_LIMITS_DEG.items():
+        out[joint] = max(low, min(high, _finite(pose[joint], joint)))
+    out["speed"] = max(0.05, min(1.0, _finite(speed, "speed")))
+    return out
+
+
 def encode_message(message: Mapping[str, Any]) -> str:
     """Encode a message as one JSON text message for the rover link."""
     if not isinstance(message, Mapping) or not isinstance(

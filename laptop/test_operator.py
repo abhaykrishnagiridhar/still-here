@@ -31,7 +31,7 @@ def seen(blocks, survivor_mm=(300.0, 0.0), survivor_px=(320, 100)):
     if survivor_mm is None:
         result = plan(blocks)
     else:
-        result = route(blocks, [], (0.0, 0.0), survivor_mm, bounds=BOUNDS)
+        result = route(blocks, [], (0.0, 0.0), survivor_mm, bounds=BOUNDS, corridor=60.0)
     return SimpleNamespace(result=result, survivor=survivor_px, px_per_mm=2.0)
 
 

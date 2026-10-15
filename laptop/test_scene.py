@@ -77,13 +77,29 @@ def test_without_a_survivor_the_old_planner_picks_every_removable_block():
 
 
 def test_with_a_survivor_a_block_that_can_be_driven_around_is_left_alone():
-    scene = scene_of([seen(1, 150.0, 0.0)], survivor_mm=(300.0, 0.0))
+    scene = scene_of([seen(1, 150.0, 170.0)], survivor_mm=(300.0, 0.0))  # well off the straight line
 
     result = decide(scene)
 
     assert isinstance(result, RoutePlan)
     assert result.ok
     assert result.order == ()
+
+
+def test_a_block_in_the_middle_of_a_240_mm_corridor_is_removed_because_going_round_costs_more():
+    scene = scene_of([seen(1, 150.0, 0.0)], survivor_mm=(300.0, 0.0))
+
+    result = decide(scene)  # the default corridor is the buggy's 200 mm plus clearance
+
+    assert [b.id for b in result.order] == [1]
+
+
+def test_a_narrower_corridor_can_be_asked_for_and_then_the_same_block_can_be_driven_around():
+    scene = scene_of([seen(1, 150.0, 0.0)], survivor_mm=(300.0, 0.0))
+
+    result = decide(scene, corridor_mm=60.0)
+
+    assert result.ok and result.order == ()
 
 
 def test_a_block_on_the_survivor_has_to_be_removed():
@@ -145,3 +161,67 @@ def test_building_and_deciding_do_not_change_the_inputs_and_the_scene_is_frozen(
     with pytest.raises(dataclasses.FrozenInstanceError):
         scene.survivor = (0.0, 0.0)
     assert isinstance(scene.blocks[0], Block)
+
+
+# --- with a calibration instead of a flat scale -------------------------------------------
+
+from calibrate import fit  # noqa: E402  (kept next to the tests that use it)
+from scene import scene_from_blocks  # noqa: E402
+
+# A camera at an angle: ground distance is squeezed in the picture. The 4 corner points
+# define the mapping, so the pixels below are NOT a flat 1.5 pixels per millimetre.
+CALIBRATION = fit([
+    [320, 480, 0, 0],
+    [320, 180, 300, 0],
+    [120, 480, 0, 100],
+    [520, 480, 0, -100],
+    [250, 180, 300, 100],
+    [390, 180, 300, -100],
+])
+
+
+def test_a_calibrated_scene_puts_each_thing_where_the_calibration_says():
+    seen_block = Seen(id=1, x=320, y=330)
+    scene = build_scene([seen_block], [], (320, 250), ORIGIN, SCALE, projection=CALIBRATION)
+
+    forward, left = CALIBRATION.to_mm((320, 330))
+    assert (scene.blocks[0].x, scene.blocks[0].y) == pytest.approx((forward, left))
+    assert scene.survivor == pytest.approx(CALIBRATION.to_mm((320, 250)))
+    flat = build_scene([seen_block], [], None, ORIGIN, SCALE)
+    assert scene.blocks[0].x != pytest.approx(flat.blocks[0].x, abs=1.0)  # the flat scale is not the same
+
+
+def test_a_calibrated_heat_zone_keeps_its_radius_in_millimetres():
+    scene = build_scene([], [Seen(id=1, x=320, y=330)], None, ORIGIN, SCALE, projection=CALIBRATION)
+
+    assert scene.heat_zones[0].radius == HEAT_RADIUS_MM
+
+
+def test_markers_already_in_millimetres_still_get_heat_and_survivor_from_the_calibration():
+    block = Block(1, 1, 100.0, 0.0, 1)
+
+    scene = scene_from_blocks([block], [Seen(id=1, x=320, y=330)], (320, 250), ORIGIN, SCALE, projection=CALIBRATION)
+
+    assert scene.blocks == (block,)
+    assert scene.survivor == pytest.approx(CALIBRATION.to_mm((320, 250)))
+
+
+def test_the_calibrated_view_draws_everything_back_where_the_camera_saw_it():
+    scene = build_scene([Seen(id=1, x=320, y=330)], [Seen(id=2, x=250, y=300)], None, ORIGIN, SCALE, projection=CALIBRATION)
+    result = decide(scene)
+
+    shown, zones = view_in_px(result, scene.heat_zones, ORIGIN, SCALE, projection=CALIBRATION)
+
+    placed = {b.id: (b.x, b.y) for b in [*shown.order, *(i.block for i in shown.left)]}
+    assert placed[1] == pytest.approx((320, 330), abs=1e-3)
+    assert (zones[0].x, zones[0].y) == pytest.approx((250, 300), abs=1e-3)
+    assert zones[0].radius == pytest.approx(CALIBRATION.radius_px(CALIBRATION.to_mm((250, 300)), HEAT_RADIUS_MM))
+
+
+def test_the_calibrated_route_is_drawn_back_in_pixels():
+    path = [CALIBRATION.to_mm((320, 400)), CALIBRATION.to_mm((320, 250))]
+
+    drawn = path_in_px(path, ORIGIN, SCALE, projection=CALIBRATION)
+
+    assert drawn[0] == pytest.approx((320, 400), abs=1e-3)
+    assert drawn[1] == pytest.approx((320, 250), abs=1e-3)

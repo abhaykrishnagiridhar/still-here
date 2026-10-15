@@ -1,0 +1,217 @@
+// Bench test for the rover's hardware, one part at a time, from the Serial Monitor.
+// Reference sketch, not built by PlatformIO: paste it into the Arduino IDE (File, New).
+//
+// Arduino IDE settings (Tools menu): same as cam_probe.txt.
+//   Board "ESP32S3 Dev Module", PSRAM "OPI PSRAM", Flash Size "16MB",
+//   USB CDC On Boot "Enabled", USB Mode "Hardware CDC and JTAG".
+//   Serial Monitor: 115200 baud, line ending "Newline". Save it as bringup.
+//
+// Commands (type one, press Enter):
+//   help                    list the commands
+//   scan                    find the servo driver on its I2C bus. Expect 0x40.
+//   servo <ch> <angle>      move servo channel ch (0 to 15) to angle (10 to 170), slowly
+//   off                     let go of all servos (they go limp)
+//   motor <L|R> <f|r|s>     left or right wheels forward, reverse or stop. Stops itself after 1.5 s.
+//   batt                    pack voltage from the divider (needs the divider fitted)
+//   sensors                 the two obstacle sensors and the flame sensor
+//   stop                    stop the wheels and let go of the servos
+//
+// Safe order: scan, then servo (the small gripper first, with the arm held clear), then motor with
+// the wheels OFF the ground, then batt and sensors. The pins match firmware/pins.h. If you change
+// one there, change it here too.
+#include <Wire.h>
+
+// ---- pins (same as firmware/pins.h) -------------------------------------------------------
+const int PIN_I2C_SDA = 39;
+const int PIN_I2C_SCL = 40;
+const int MOTOR_L_EN = 41, MOTOR_L_IN1 = 42, MOTOR_L_IN2 = 47;
+const int MOTOR_R_EN = 48, MOTOR_R_IN1 = 21, MOTOR_R_IN2 = 14;
+const int IR_OBSTACLE_L = 38, IR_OBSTACLE_R = 2, IR_FLAME_L = 46;
+const int BATT_ADC = 1;
+
+// ---- limits -------------------------------------------------------------------------------
+const uint8_t PCA_ADDR = 0x40;
+const int ANGLE_MIN = 10, ANGLE_MAX = 170;  // never ask a servo to hit its end stops
+const int PULSE_MIN_US = 600, PULSE_MAX_US = 2400;
+const uint32_t SERVO_STEP_MS = 15;          // 1 degree every 15 ms: about 66 degrees per second
+const uint32_t MOTOR_RUN_MS = 1500;
+const float DIVIDER_TOP_K = 100.0, DIVIDER_BOTTOM_K = 33.0;  // docs/power.md
+
+int servoAngle[16];  // last angle sent to each channel, -1 = never moved
+uint32_t motorStopAt = 0;
+String line;
+
+// ---- servo driver (PCA9685) -----------------------------------------------------------------
+void pcaWrite(uint8_t reg, uint8_t value) {
+  Wire1.beginTransmission(PCA_ADDR);
+  Wire1.write(reg);
+  Wire1.write(value);
+  Wire1.endTransmission();
+}
+
+bool pcaBegin() {
+  Wire1.begin(PIN_I2C_SDA, PIN_I2C_SCL, 400000);
+  Wire1.beginTransmission(PCA_ADDR);
+  if (Wire1.endTransmission() != 0) return false;
+  pcaWrite(0x00, 0x10);  // sleep, so the frequency can be set
+  pcaWrite(0xFE, 121);   // 50 Hz: 25 MHz / (4096 * 50) - 1
+  pcaWrite(0x00, 0x20);  // wake, auto-increment on
+  delay(5);
+  pcaWrite(0x00, 0xA0);  // restart
+  return true;
+}
+
+void pcaSetTicks(int channel, int onTicks, int offTicks) {
+  Wire1.beginTransmission(PCA_ADDR);
+  Wire1.write(0x06 + 4 * channel);
+  Wire1.write(onTicks & 0xFF);
+  Wire1.write(onTicks >> 8);
+  Wire1.write(offTicks & 0xFF);
+  Wire1.write(offTicks >> 8);
+  Wire1.endTransmission();
+}
+
+void servoWrite(int channel, int angle) {
+  int pulseUs = PULSE_MIN_US + (PULSE_MAX_US - PULSE_MIN_US) * angle / 180;
+  pcaSetTicks(channel, 0, pulseUs * 4096 / 20000);
+}
+
+// Moves one degree at a time, so a large servo never slams.
+void servoMove(int channel, int target) {
+  int from = servoAngle[channel] < 0 ? target : servoAngle[channel];
+  int step = target >= from ? 1 : -1;
+  for (int a = from; a != target; a += step) {
+    servoWrite(channel, a);
+    delay(SERVO_STEP_MS);
+  }
+  servoWrite(channel, target);
+  servoAngle[channel] = target;
+}
+
+void servosOff() {
+  for (int ch = 0; ch < 16; ch++) {
+    pcaSetTicks(ch, 0, 0);
+    servoAngle[ch] = -1;
+  }
+}
+
+// ---- wheels (L298N) ---------------------------------------------------------------------------
+void motorSet(char side, char dir) {
+  int en = side == 'L' ? MOTOR_L_EN : MOTOR_R_EN;
+  int in1 = side == 'L' ? MOTOR_L_IN1 : MOTOR_R_IN1;
+  int in2 = side == 'L' ? MOTOR_L_IN2 : MOTOR_R_IN2;
+  digitalWrite(in1, dir == 'f');
+  digitalWrite(in2, dir == 'r');
+  digitalWrite(en, dir != 's');
+  if (dir != 's') motorStopAt = millis() + MOTOR_RUN_MS;
+}
+
+void motorsStop() {
+  motorSet('L', 's');
+  motorSet('R', 's');
+  motorStopAt = 0;
+}
+
+// ---- commands -----------------------------------------------------------------------------------
+void doScan() {
+  Wire1.begin(PIN_I2C_SDA, PIN_I2C_SCL, 400000);
+  int found = 0;
+  for (uint8_t a = 0x08; a < 0x78; a++) {
+    Wire1.beginTransmission(a);
+    if (Wire1.endTransmission() == 0) {
+      Serial.printf("  device at 0x%02X%s\n", a, a == PCA_ADDR ? "  <- servo driver" : "");
+      found++;
+    }
+  }
+  if (found == 0) Serial.println("  nothing answered. Check SDA/SCL wires, VCC (3V3) and GND on the PCA9685.");
+}
+
+void doBattery() {
+  int mv = analogReadMilliVolts(BATT_ADC);
+  float pack = mv / 1000.0 * (DIVIDER_TOP_K + DIVIDER_BOTTOM_K) / DIVIDER_BOTTOM_K;
+  Serial.printf("  pin reads %d mV, so the pack is about %.2f V (2S: 8.4 full, 7.4 nominal, stop below 6.4)\n",
+                mv, pack);
+}
+
+void doSensors() {
+  Serial.printf("  obstacle left %d, obstacle right %d, flame %d  (most modules read 0 when triggered)\n",
+                digitalRead(IR_OBSTACLE_L), digitalRead(IR_OBSTACLE_R), digitalRead(IR_FLAME_L));
+}
+
+void doServo(int channel, int angle) {
+  if (channel < 0 || channel > 15) return void(Serial.println("  channel must be 0 to 15"));
+  if (angle < ANGLE_MIN || angle > ANGLE_MAX) {
+    return void(Serial.printf("  angle must be %d to %d\n", ANGLE_MIN, ANGLE_MAX));
+  }
+  if (!pcaBegin()) return void(Serial.println("  servo driver not found. Run: scan"));
+  if (servoAngle[channel] < 0) Serial.println("  first move of this servo: it will jump to the angle. Keep clear.");
+  servoMove(channel, angle);
+  Serial.printf("  channel %d at %d degrees\n", channel, angle);
+}
+
+void handle(String command) {
+  command.trim();
+  if (command == "help") {
+    Serial.println("  scan | servo <ch> <angle> | off | motor <L|R> <f|r|s> | batt | sensors | stop");
+  } else if (command == "scan") {
+    doScan();
+  } else if (command.startsWith("servo ")) {
+    int ch = -1, angle = -1;
+    sscanf(command.c_str(), "servo %d %d", &ch, &angle);
+    doServo(ch, angle);
+  } else if (command == "off") {
+    servosOff();
+    Serial.println("  servos released");
+  } else if (command.startsWith("motor ")) {
+    char side = 0, dir = 0;
+    sscanf(command.c_str(), "motor %c %c", &side, &dir);
+    side = toupper(side);
+    if ((side == 'L' || side == 'R') && (dir == 'f' || dir == 'r' || dir == 's')) {
+      motorSet(side, dir);
+      Serial.printf("  %c wheels %s\n", side, dir == 'f' ? "forward" : dir == 'r' ? "reverse" : "stopped");
+    } else {
+      Serial.println("  usage: motor L f   (L or R, then f, r or s)");
+    }
+  } else if (command == "batt") {
+    doBattery();
+  } else if (command == "sensors") {
+    doSensors();
+  } else if (command == "stop") {
+    motorsStop();
+    servosOff();
+    Serial.println("  everything stopped");
+  } else if (command.length() > 0) {
+    Serial.println("  unknown command. Type: help");
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  unsigned long start = millis();
+  while (!Serial && millis() - start < 10000) delay(10);
+  const int outputs[] = {MOTOR_L_EN, MOTOR_L_IN1, MOTOR_L_IN2, MOTOR_R_EN, MOTOR_R_IN1, MOTOR_R_IN2};
+  for (int pin : outputs) {
+    pinMode(pin, OUTPUT);
+    digitalWrite(pin, LOW);  // wheels stay still
+  }
+  const int inputs[] = {IR_OBSTACLE_L, IR_OBSTACLE_R, IR_FLAME_L};
+  for (int pin : inputs) pinMode(pin, INPUT);
+  for (int& angle : servoAngle) angle = -1;
+  Serial.println("\n=== STILL HERE hardware bench test. Type: help ===");
+}
+
+void loop() {
+  while (Serial.available()) {
+    char c = Serial.read();
+    if (c == '\n' || c == '\r') {
+      handle(line);
+      line = "";
+    } else if (line.length() < 60) {
+      line += c;
+    }
+  }
+  if (motorStopAt != 0 && millis() > motorStopAt) {
+    motorsStop();
+    Serial.println("  wheels stopped (1.5 s limit)");
+  }
+}

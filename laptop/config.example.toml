@@ -11,6 +11,11 @@ marker_mm = 30             # printed side of the ArUco marker on a block face (m
 heavy_marker_ids = [9]     # markers that mean "heavy / load-bearing"
 top_marker_ids = [5, 6, 7, 8]  # markers on top-layer blocks; every other id is a bottom block
 
+[buggy]
+breadth_mm = 200           # official width of the buggy
+length_mm = 475            # official length is between 450 and 500: measure yours
+clearance_mm = 20          # spare room each side, so the path planner needs breadth + 2 x this
+
 [survivor_light]
 pulse_hz = 1.5             # expected pulse rate of the survivor LED
 

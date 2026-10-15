@@ -18,7 +18,7 @@ OUTSIDE = {"origin": "https://evil.example"}
 
 
 def seen(blocks=WALL, survivor_px=(320, 100)):
-    result = route(blocks, [], (0.0, 0.0), (300.0, 0.0), bounds=BOUNDS)
+    result = route(blocks, [], (0.0, 0.0), (300.0, 0.0), bounds=BOUNDS, corridor=60.0)
     scene = SimpleNamespace(blocks=tuple(blocks))
     return SimpleNamespace(result=result, survivor=survivor_px, px_per_mm=2.0, scene=scene)
 
@@ -285,3 +285,108 @@ def test_a_source_that_is_given_starts_nothing_until_run(tmp_path):
     app = server.create_app(source=str(tmp_path / "nothing.avi"))
 
     assert app.state.source == str(tmp_path / "nothing.avi")
+
+
+def test_a_calibration_given_to_the_server_is_used_by_its_camera_pipeline():
+    from calibrate import fit
+
+    calibration = fit([[320, 480, 0, 0], [320, 180, 150, 0], [170, 480, 0, 75], [470, 480, 0, -75]])
+    app = server.create_app(source=None, calibration=calibration)
+
+    for i in range(60):
+        app.state.capture.process(red_blocks_frame(), i / 30.0)
+
+    blocks = app.state.operator.latest_blocks()
+    middle = min(blocks, key=lambda b: abs(b.y))
+    assert (middle.x, middle.y) == pytest.approx(calibration.to_mm((300, 300)), abs=1.0)
+
+
+# --- manual control ---------------------------------------------------------------------------
+
+
+class ManualClock:
+    def __init__(self):
+        self.now = 10.0
+
+    def __call__(self):
+        return self.now
+
+
+@pytest.fixture
+def manual_app(written):
+    clock = ManualClock()
+    app = server.create_app(source=None, report_writer=written, manual_clock=clock)
+    app.state.test_clock = clock
+    return app
+
+
+def wheels(app):
+    return app.state.link._rover.wheels
+
+
+def test_driving_by_hand_moves_the_simulated_wheels(manual_app):
+    client = TestClient(manual_app)
+
+    response = client.post("/api/manual/drive", json={"left": 0.5, "right": -0.5}, headers=LOCAL)
+
+    assert response.status_code == 200
+    assert wheels(manual_app) == (0.5, -0.5)
+
+
+def test_the_arm_can_be_moved_by_hand_and_is_held_inside_its_limits(manual_app):
+    client = TestClient(manual_app)
+
+    response = client.post(
+        "/api/manual/arm", json={"base": 500, "shoulder": 60, "elbow": -90, "gripper": 0}, headers=LOCAL
+    )
+
+    assert response.status_code == 200
+    assert manual_app.state.link._rover._target["base"] == 90.0
+
+
+def test_the_wheels_stop_by_themselves_when_the_page_stops_sending(manual_app):
+    client = TestClient(manual_app)
+    client.post("/api/manual/drive", json={"left": 1, "right": 1}, headers=LOCAL)
+
+    manual_app.state.test_clock.now += 1.0
+    manual_app.state.advance(0.05)
+
+    assert wheels(manual_app) == (0.0, 0.0)
+
+
+def test_the_stop_button_halts_the_wheels(manual_app):
+    client = TestClient(manual_app)
+    client.post("/api/manual/drive", json={"left": 1, "right": 1}, headers=LOCAL)
+
+    assert client.post("/api/manual/stop", headers=LOCAL).status_code == 200
+    assert wheels(manual_app) == (0.0, 0.0)
+
+
+def test_manual_commands_are_refused_while_an_approved_plan_runs(manual_app):
+    client = TestClient(manual_app)
+    feed(manual_app)
+    client.post("/api/approve", json={"key": plan_key(client)}, headers=LOCAL)
+
+    response = client.post("/api/manual/drive", json={"left": 1, "right": 1}, headers=LOCAL)
+
+    assert response.status_code == 409
+    assert "plan is running" in response.json()["detail"].lower()
+
+
+def test_a_page_from_another_site_cannot_drive_the_rover(manual_app):
+    client = TestClient(manual_app)
+
+    for path, body in (
+        ("/api/manual/drive", {"left": 1, "right": 1}),
+        ("/api/manual/arm", {"base": 0, "shoulder": 60, "elbow": -90, "gripper": 0}),
+        ("/api/manual/stop", None),
+    ):
+        assert client.post(path, json=body, headers=OUTSIDE).status_code == 403, path
+    assert wheels(manual_app) == (0.0, 0.0)
+
+
+@pytest.mark.parametrize("body", [{}, {"left": "fast", "right": 0}, {"left": 1}])
+def test_a_drive_command_that_is_not_two_numbers_is_refused(manual_app, body):
+    client = TestClient(manual_app)
+
+    assert client.post("/api/manual/drive", json=body, headers=LOCAL).status_code == 422

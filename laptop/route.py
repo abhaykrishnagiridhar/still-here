@@ -26,9 +26,13 @@ Point = tuple[float, float]
 Bounds = tuple[float, float, float, float]  # x_min, y_min, x_max, y_max
 Cell = tuple[int, int]
 
-# Block size matches config.example.toml. The corridor is an assumption: measure the real rover.
+# Sizes match config.example.toml. The buggy is officially 200 mm wide, so the corridor it needs
+# is that plus a little clearance each side. Its length (450 to 500 mm) matters for turning, not
+# for this width.
 DEFAULT_BLOCK_SIZE_MM = 40.0  # the blocks are 40 mm cubes
-DEFAULT_CORRIDOR_MM = 60.0  # width the rover needs to drive through
+BUGGY_BREADTH_MM = 200.0  # the buggy's official width
+DEFAULT_CLEARANCE_MM = 20.0  # spare room each side of the buggy
+DEFAULT_CORRIDOR_MM = BUGGY_BREADTH_MM + 2 * DEFAULT_CLEARANCE_MM  # width the rover needs to drive through
 DEFAULT_CELL_MM = 10.0  # grid resolution
 DEFAULT_REMOVAL_COST_MM = 100.0  # removing one block is worth this much extra driving
 

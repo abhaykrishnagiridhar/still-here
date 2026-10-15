@@ -29,6 +29,10 @@ from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 
 from aruco import Config
+from calibrate import DEFAULT_FILE as CALIBRATION_FILE
+from calibrate import Calibration
+from calibrate import load as load_calibration
+from manual_core import Manual
 from operator_core import Operator
 from origin_guard import origin_allowed
 from report import build_report, choose_summary, write_report
@@ -40,7 +44,7 @@ LAPTOP_DIR = Path(__file__).resolve().parent
 # Only these files are ever served, so config.toml and the source code never are.
 PAGES = {
     "index.html", "autonomous.html", "control.html", "blueprint.html", "terms.html", "privacy.html",
-    "landing.css", "landing.js", "operator.css", "operator.js",
+    "landing.css", "landing.js", "operator.css", "operator.js", "control.js", "api.js", "ui_logic.js",
 }
 FRAME_SIZE = (640, 480)
 STEP_S = 0.05  # how often the simulated rover is advanced
@@ -135,11 +139,26 @@ class Approval(BaseModel):
     key: str
 
 
+class Drive(BaseModel):
+    left: float
+    right: float
+
+
+class ArmPose(BaseModel):
+    base: float
+    shoulder: float
+    elbow: float
+    gripper: float
+    speed: float = 1.0
+
+
 def create_app(
     source: Optional[str] = None,
     config: Optional[Config] = None,
     report_writer: Callable = write_report,
     report_path: Path = REPORT_FILE,
+    calibration: Optional[Calibration] = None,
+    manual_clock: Callable[[], float] = time.monotonic,
 ) -> FastAPI:
     """Build the server. With a source it also reads that camera once it is started; with
     none (as in tests) nothing runs in the background."""
@@ -154,12 +173,14 @@ def create_app(
     link = SimLink(blocks_seen)
     operator = Operator(link)
     holder["operator"] = operator
-    capture = Capture(Pipeline(config), operator, lock)
+    capture = Capture(Pipeline(config, calibration), operator, lock)
+    manual = Manual(link, is_busy=operator.busy, clock=manual_clock)
 
     def advance(dt: float) -> None:
         with lock:
             operator.on_rover(link.advance(dt))
             operator.tick()
+            manual.tick()  # stops the wheels if the control page stopped sending
             finished = operator.take_finished_facts()
         if finished is not None:  # a run just ended: save the report file and chime once
             report_writer(finished, str(report_path), choose_summary(build_report(finished)))
@@ -211,6 +232,7 @@ def create_app(
     app.state.capture = capture
     app.state.link = link
     app.state.advance = advance
+    app.state.manual = manual
 
     @app.get("/")
     def root() -> RedirectResponse:
@@ -269,6 +291,26 @@ def create_app(
             operator.reset()
         return {"ok": True}
 
+    def refused_or_ok(outcome) -> dict:
+        if not outcome.ok:
+            raise HTTPException(status_code=409, detail=outcome.message)
+        return {"ok": True, "message": outcome.message}
+
+    @app.post("/api/manual/drive", dependencies=[Depends(guard)])
+    def manual_drive(body: Drive) -> dict:
+        with lock:
+            return refused_or_ok(manual.drive(body.left, body.right))
+
+    @app.post("/api/manual/arm", dependencies=[Depends(guard)])
+    def manual_arm(body: ArmPose) -> dict:
+        with lock:
+            return refused_or_ok(manual.arm_pose(body.base, body.shoulder, body.elbow, body.gripper, body.speed))
+
+    @app.post("/api/manual/stop", dependencies=[Depends(guard)])
+    def manual_stop() -> dict:
+        with lock:
+            return refused_or_ok(manual.stop())
+
     @app.get("/{name}")  # last, so it never shadows the routes above
     def page(name: str) -> FileResponse:
         if name not in PAGES:
@@ -288,12 +330,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
     try:
         config = load_config()
+        calibration = load_calibration() if CALIBRATION_FILE.exists() else None
     except ValueError as error:
-        print(f"Config problem: {error}", file=sys.stderr)
+        print(f"Config or calibration problem: {error}", file=sys.stderr)
         return 1
+    if calibration is None:
+        print("No calibration.json: using a flat scale from the block size. "
+              "For a camera at an angle, run calibrate.py.")
     import uvicorn
 
-    uvicorn.run(create_app(args.source, config), host=args.host, port=args.port)
+    uvicorn.run(create_app(args.source, config, calibration=calibration), host=args.host, port=args.port)
     return 0
 
 

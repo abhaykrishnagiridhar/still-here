@@ -153,9 +153,25 @@ still-here/
     test_vision.py           Tests for the vision demo on synthetic pictures
     server.py                Operator server: camera with the plan drawn on it, tap, approve, report
     operator_core.py         What the operator sees and may approve; sends the plan to the rover
+    manual_core.py           Manual drive and arm commands, with a stop if the page goes quiet
+    marker_sheet.py          Makes a printable sheet of ArUco block markers
+    api.ts, ui_logic.ts      Page code shared by both pages: server calls and the plain decisions
+    operator.ts, control.ts  The autonomous page and the manual control page, in TypeScript
+    *.js built from the .ts  What the browser loads, made by build.mjs. Edit the .ts, then run node build.mjs
+    build.mjs, tsconfig.json, package.json  Build, type-check and test setup for the pages
+    ui_logic.test.ts         Tests for the page decisions, run with node --test
+    test_manual.py, test_marker_sheet.py, test_ui_build.py  Tests for manual control, markers and the page build
     plan_message.py          Builds and checks the messages sent to the rover (whole-number plan ids)
     report.py                Fact-first run report, with a summary only from an allowed list, and a chime
     run.py                   Console run of the same protocol steps against a rover link you supply
+    calibrate.py             Camera calibration: picture pixels to millimetres on the table (perspective fit)
+    calibration_points.example.json  An example points file for calibrate.py (replace with measured points)
+    trial_log.py             Logs the two-block stack test to docs/trials.csv and checks the 8 of 10 gate
+    scenario_runner.py       Replays a scenario of protocol messages on the software rover or a real one
+    scenario_pick_drop.json  The bundled pick and drop scenario
+    test_calibrate.py        Tests for the calibration
+    test_trial_log.py        Tests for the trial log
+    test_scenario_runner.py  Tests for the scenario runner
     test_plan_message.py     Tests for the messages
     test_report.py           Tests for the report
     test_run.py              Tests for the console run
@@ -163,9 +179,6 @@ still-here/
     test_server.py           Tests for the server
     test_operator.py         Tests for the operator logic
     test_origin_guard.py     Tests for the origin rule
-    operator.css, operator.js  The operator page's style and script
-    calibrate.py *           Camera pixels to arm position, one command to re-run
-    trial_log.py *           Appends runs to trials.csv, applies the 5 mm / 10 degree rule
   firmware/
     main.cpp                 Boot stub, grows into the rover loop
     pins.h                   Pin map for the ESP32-S3 board: camera confirmed, the rest untested
@@ -174,6 +187,9 @@ still-here/
     rover_sketch.txt         Earlier all-in-one rover sketch, reference only, not built
     cam_probe.txt            Camera sensor probe for the S3 board, paste into the Arduino IDE
     cam_scan.txt             Full camera pin scan, for when the probe finds no known map
+    bringup.txt              Bench test for servos, wheels, sensors and battery, paste into the Arduino IDE
+    esp32cam_stream.txt      Old AI-Thinker ESP32-CAM streaming sketch, reference only, not built
+    rover_control.py         Menu client for the rover (uses the older command set, see docs/protocol.md)
     camera.h, camera.cpp     GC2145 camera: raw pictures turned into JPEG on the chip
     mjpeg_server.h, .cpp     Video over Wi-Fi: /stream (MJPEG), /capture (one picture)
     link.cpp *               WebSocket server, link-loss handling

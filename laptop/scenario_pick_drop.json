@@ -1,0 +1,20 @@
+{
+  "name": "pick_and_drop",
+  "description": "Store a two-step plan, wait for the rover to confirm it, start it, and wait for both steps and the finish.",
+  "world": {
+    "blocks": [{"id": 1, "x": 150, "y": 0, "layer": 1}]
+  },
+  "steps": [
+    {"send": {"type": "mode", "mode": "auto"}},
+    {"send": {"type": "plan", "plan_id": 1, "steps": [
+      {"id": 1, "action": "pick", "x": 150, "y": 0, "z": 20},
+      {"id": 2, "action": "drop", "x": 100, "y": -80, "z": 20}
+    ]}},
+    {"wait_for": {"type": "event", "code": "plan_stored"}, "timeout_s": 2},
+    {"wait_for": {"type": "state", "plan_id": 1}, "timeout_s": 2},
+    {"send": {"type": "plan_start", "plan_id": 1}},
+    {"wait_for": {"type": "step_done", "plan_id": 1, "step_id": 1, "ok": true}, "timeout_s": 30},
+    {"wait_for": {"type": "step_done", "plan_id": 1, "step_id": 2, "ok": true}, "timeout_s": 30},
+    {"wait_for": {"type": "event", "code": "plan_finished"}, "timeout_s": 30}
+  ]
+}

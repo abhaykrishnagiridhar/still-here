@@ -38,6 +38,9 @@ import cv2
 import numpy as np
 
 from aruco import Config, Marker, MarkerTracker, blocks_from_markers, find_markers, load_config
+from calibrate import DEFAULT_FILE as CALIBRATION_FILE
+from calibrate import Calibration
+from calibrate import load as load_calibration
 from models import Block, HeatZone
 from planner import PlanResult
 from route import RoutePlan
@@ -413,8 +416,9 @@ class Pipeline:
     scale from the 40 mm blocks, work in millimetres, plan, and draw the answer. It takes a
     picture and a clock reading (seconds) so it can be tested without a camera or a window."""
 
-    def __init__(self, config: Optional[Config] = None) -> None:
+    def __init__(self, config: Optional[Config] = None, calibration: Optional[Calibration] = None) -> None:
         self._config = config if config is not None else Config()
+        self._calibration = calibration  # when set, it places things on the table instead of a flat scale
         self._block_tracker = Tracker()
         self._heat_tracker = Tracker()
         self._marker_tracker = MarkerTracker()
@@ -429,11 +433,16 @@ class Pipeline:
     def px_per_mm(self) -> Optional[float]:
         return (self._marker_scale if self._using_markers else self._scale).px_per_mm
 
+    def _to_mm(self, point: tuple[float, float], origin: tuple[float, float], px_per_mm: float):
+        if self._calibration is not None:
+            return self._calibration.to_mm(point)
+        return to_mm(point, origin, px_per_mm)
+
     def _blocks_from_markers(
         self, markers: Sequence[Marker], origin: tuple[float, float], px_per_mm: float
     ) -> tuple[Block, ...]:
         in_mm = [
-            Marker(m.id, *to_mm((m.x, m.y), origin, px_per_mm), m.side / px_per_mm) for m in markers
+            Marker(m.id, *self._to_mm((m.x, m.y), origin, px_per_mm), m.side / px_per_mm) for m in markers
         ]
         return blocks_from_markers(in_mm, self._config.rules, self._config.block_mm)
 
@@ -483,11 +492,13 @@ class Pipeline:
         if self._using_markers:
             scene = scene_from_blocks(
                 self._blocks_from_markers(markers, origin, px_per_mm),
-                heat_tracks, survivor, origin, px_per_mm,
+                heat_tracks, survivor, origin, px_per_mm, projection=self._calibration,
             )
         else:
-            scene = build_scene(block_tracks, heat_tracks, survivor, origin, px_per_mm)
-        result = decide(scene)
+            scene = build_scene(
+                block_tracks, heat_tracks, survivor, origin, px_per_mm, projection=self._calibration
+            )
+        result = decide(scene, corridor_mm=self._config.corridor_mm)
 
         # Report the plan only once the survivor search has had time to rule out its own light.
         report = None
@@ -496,8 +507,12 @@ class Pipeline:
             report = "=== PLAN CHANGED ===\n" + describe_plan(result, scene.survivor, unit="mm")
             self._last_signature = signature
 
-        shown_result, zones = view_in_px(result, scene.heat_zones, origin, px_per_mm)
-        route_px = path_in_px(getattr(result, "path", ()), origin, px_per_mm)
+        shown_result, zones = view_in_px(
+            result, scene.heat_zones, origin, px_per_mm, projection=self._calibration
+        )
+        route_px = path_in_px(
+            getattr(result, "path", ()), origin, px_per_mm, projection=self._calibration
+        )
         shown = draw_overlay(frame, shown_result, zones, survivor, route_px)
         if warming_up:
             cv2.putText(shown, "Looking for the survivor light...", (10, 25),
@@ -533,10 +548,14 @@ def run(source: str = "0", show_masks: bool = False) -> int:
         sleep=time.sleep,
     )
     try:
-        pipeline = Pipeline(load_config())
+        calibration = load_calibration() if CALIBRATION_FILE.exists() else None
+        pipeline = Pipeline(load_config(), calibration)
     except ValueError as error:
-        print(f"Config problem: {error}", file=sys.stderr)
+        print(f"Config or calibration problem: {error}", file=sys.stderr)
         return 1
+    if calibration is None:
+        print("No calibration.json: using a flat scale from the block size. "
+              "For a camera at an angle, run calibrate.py.", flush=True)
     clock = clock_for(source)
 
     print("--- Rover vision and planning started (ESC to quit) ---", flush=True)

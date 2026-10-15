@@ -132,6 +132,10 @@ class Operator:
             self._phase = "done"
             self._note = "Confirmed by the camera: the way to the survivor is clear."
 
+    def busy(self) -> bool:
+        """True while an approved plan is waiting to start, running, or being checked."""
+        return self._phase in BUSY_PHASES
+
     def latest_blocks(self) -> tuple:
         """The blocks (in millimetres) in the newest picture, for a simulated rover to copy."""
         scene = getattr(self._latest, "scene", None)
