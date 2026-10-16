@@ -202,6 +202,17 @@ The **two-block stack test**: on a two-layer stack the camera finds both blocks,
 
 Pass rule: the bottom block moves less than 5 mm and rotates less than 10 degrees (measured from its marker before and after).
 
+For the current time-boxed demo, this is a deferred validation gate rather than a completed
+claim. The explicit approximate hardware profile and live-demo limits are in
+[docs/demo-assumptions.md](docs/demo-assumptions.md).
+
+## Real-board integration
+
+Use [docs/bench-and-integration-checklist.md](docs/bench-and-integration-checklist.md) for the safe,
+ordered board bring-up: PCA9685 scan, one-joint-at-a-time servo checks, wheels, sensors, battery,
+Wi-Fi, laptop link, calibration, then the 8/10 two-block gate. It deliberately keeps unmeasured
+servo directions, sensor polarity, wheel track, and top speed out of production constants.
+
 ## Phone and Blender digital twin
 
 You can rehearse manual control without any rover hardware. The phone sends tilt samples to the laptop, the laptop turns them into the same drive and arm messages the firmware will use, and Blender runs the same rover model (`laptop/sim_rover.py`).
