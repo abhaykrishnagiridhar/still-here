@@ -1,7 +1,7 @@
 """Learning from past runs, in the smallest honest way.
 
-After a run that bumped something (the rover's own sensor hit an obstacle, or a block we were
-not touching got knocked), the corridor the planner leaves around blocks gets a little wider.
+After a run that bumped something (the rover said it brushed a block, its own sensor hit an obstacle
+more often than the picks explain, or a block we were not touching got knocked), the corridor the planner leaves around blocks gets a little wider.
 After clean runs the old trouble ages out of a short window and the extra room goes away again.
 
 It can only ever add room on top of the configured clearance, never take any away, and the
@@ -90,7 +90,7 @@ class Experience:
         # The rover stops for an obstacle each time it closes in on a block to pick it, so one
         # stop per pick is normal. Only stops beyond that mean it met something it did not plan for.
         expected_stops = facts.get("steps_planned", 0) // 2
-        if facts.get("obstacles_detected", 0) > expected_stops:
+        if facts.get("bumped") or facts.get("obstacles_detected", 0) > expected_stops:
             return Run(run_id, True, BUMPED)
         if disturbed:
             return Run(run_id, True, KNOCKED)

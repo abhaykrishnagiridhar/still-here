@@ -10,6 +10,24 @@ from typing import Optional
 from urllib.parse import urlparse
 
 
+def host_allowed(host_header: Optional[str]) -> bool:
+    """Is this Host header one a local page would use? A page on the internet that points its own name
+    at this laptop (DNS rebinding) arrives with that name as the Host, and is refused. Allowed: an
+    address, `localhost`, a machine name with no dots, and mDNS names that end in `.local`."""
+    if not host_header:
+        return False
+    host = urlparse("//" + host_header).hostname
+    if host is None:
+        return False
+    if host == "localhost" or host.endswith(".localhost") or host.endswith(".local") or "." not in host:
+        return True
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return True
+
+
 def origin_allowed(origin: Optional[str]) -> bool:
     if not origin:
         return True

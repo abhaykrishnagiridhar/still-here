@@ -409,6 +409,7 @@ def test_the_facts_of_a_verified_run():
         "obstacles_detected": 0,
         "safe_stop_triggered": False,
         "disturbed_neighbour": False,
+        "bumped": False,
     }
 
 
@@ -490,3 +491,22 @@ def test_an_unverified_run_is_reported_as_not_verified():
 
     assert "Summary: Run was not verified." in text
     assert "completed and verified" not in text
+
+
+
+def test_each_block_is_dropped_in_its_own_slot_so_they_never_pile_up():
+    from operator_core import DROP_SLOTS_MM
+
+    link = FakeLink()
+    operator = Operator(link, clock=Clock())
+    wall = [Block(i, i, 150.0, float(y), 1) for i, y in enumerate((-75, -25, 25, 75), start=1)]
+    result = route(wall, [], (0.0, 0.0), (300.0, 0.0), bounds=(-10.0, -200.0, 320.0, 200.0), corridor=240.0)
+    operator.observe(SimpleNamespace(result=result, survivor=(320, 100), px_per_mm=2.0))
+    order = operator.state()["plan"]["order"]
+    assert len(order) == 4
+
+    operator.approve(key_of(operator))
+
+    drops = [(s["x"], s["y"]) for s in link.sent[0]["steps"] if s["action"] == "drop"]
+    assert drops == [DROP_SLOTS_MM[i % len(DROP_SLOTS_MM)] for i in range(4)]
+    assert len(set(drops)) == 4

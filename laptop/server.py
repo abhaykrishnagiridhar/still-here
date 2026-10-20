@@ -20,11 +20,13 @@ server listens on this machine only unless you pass --host.
 """
 
 import argparse
+import logging
 import secrets
 import socket
 import sys
 import threading
 import time
+from dataclasses import replace
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Callable, Iterator, Optional, Sequence
@@ -32,22 +34,27 @@ from typing import Callable, Iterator, Optional, Sequence
 import cv2
 import numpy as np
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 
 from aruco import Config
+from blender_link import BlenderLink
+from demo_world import HEAT_RADIUS_MM
+from autopilot import Autopilot
 from calibrate import DEFAULT_FILE as CALIBRATION_FILE
 from calibrate import Calibration
 from calibrate import load as load_calibration
 from experience import Experience
 from manual_core import Manual
 from operator_core import Link, Operator
-from origin_guard import origin_allowed
+from origin_guard import host_allowed, origin_allowed
 from report import build_report, choose_summary, write_report
 from rover_link import RealLink
 from sim_rover import SimRover
 from stream import FrameSource
 from vision import MAX_FAILED_READS, MAX_RECONNECTS, Pipeline, clock_for, open_source
+
+log = logging.getLogger("still_here.server")
 
 LAPTOP_DIR = Path(__file__).resolve().parent
 # Only these files are ever served, so config.toml and the source code never are.
@@ -180,6 +187,7 @@ def create_app(
     link: Optional[Link] = None,
     access_token: Optional[str] = None,
     experience: Optional[Experience] = None,
+    autopilot_episodes: Optional[int] = None,
 ) -> FastAPI:
     """Build the server. With a source it also reads that camera once it is started; with
     none (as in tests) nothing runs in the background."""
@@ -199,6 +207,15 @@ def create_app(
     pipeline.extra_clearance_mm = experience.extra_clearance_mm
     capture = Capture(pipeline, operator, lock)
     manual = Manual(link, is_busy=operator.busy, clock=manual_clock)
+    autopilot: Optional[Autopilot] = None
+    if autopilot_episodes is not None:
+        if not getattr(link, "supports_world_reset", False):
+            raise ValueError("Autonomous mode only runs against the simulated Blender rover, never a real one.")
+        autopilot = Autopilot(
+            operator, link, episodes=autopilot_episodes,
+            extra_clearance=lambda: experience.extra_clearance_mm,
+            corridor_mm=(config if config is not None else Config()).corridor_mm,
+        )
 
     def advance(dt: float) -> None:
         with lock:
@@ -211,6 +228,9 @@ def create_app(
                 experience.record(finished, disturbed=bool(finished.get("disturbed_neighbour")))
                 pipeline.extra_clearance_mm = experience.extra_clearance_mm
             report_writer(finished, str(report_path), choose_summary(build_report(finished)))
+        if autopilot is not None:
+            with lock:
+                autopilot.tick()
 
     def require_rover() -> None:
         if not getattr(link, "connected", True):
@@ -252,7 +272,10 @@ def create_app(
 
     def run_rover() -> None:
         while not stop.is_set():
-            advance(STEP_S)
+            try:
+                advance(STEP_S)
+            except Exception:  # one bad message must not stop the loop that keeps the rover's link alive
+                log.exception("rover loop step failed; carrying on")
             time.sleep(STEP_S)
 
     def read_camera() -> None:
@@ -273,7 +296,12 @@ def create_app(
                             capture.error = "Lost the camera and could not reconnect."
                     break
                 if frame is not None:
-                    capture.process(frame, clock())
+                    try:
+                        capture.process(frame, clock())
+                    except Exception as error:  # say so on the page, keep reading pictures
+                        log.exception("could not process a picture")
+                        with lock:
+                            capture.error = f"Could not process the picture: {type(error).__name__}."
                     if is_file:
                         time.sleep(FILE_FRAME_S)  # play a clip at about its normal speed
         finally:
@@ -302,6 +330,13 @@ def create_app(
     app.state.link = link
     app.state.advance = advance
     app.state.manual = manual
+    app.state.autopilot = autopilot
+
+    @app.middleware("http")
+    async def only_local_hosts(request: Request, call_next):
+        if not host_allowed(request.headers.get("host")):
+            return JSONResponse({"detail": "Open this page by the laptop's address, not by a public name."}, status_code=400)
+        return await call_next(request)
 
     @app.get("/")
     def root(request: Request) -> RedirectResponse:
@@ -322,6 +357,7 @@ def create_app(
             body["rover_connected"] = bool(getattr(link, "connected", True))
             body["rover_address"] = str(getattr(link, "address", ""))
             body["rover_error"] = str(getattr(link, "last_error", ""))
+            body["autopilot"] = autopilot.summary() if autopilot is not None else None
             return body
 
     @app.get("/api/report", dependencies=[Depends(guard)])
@@ -421,11 +457,29 @@ def lan_address(make_socket: Optional[Callable] = None) -> str:
         probe.close()
 
 
+def config_for_blender(config: Config) -> Config:
+    """The Blender demo's table-top fire pad is 56 mm wide, so the project's default 100 mm keep-out would fill
+    the picture. Use the demo's smaller radius, unless the person's own config already chose one."""
+    if config.heat_radius_mm == Config().heat_radius_mm:
+        return replace(config, heat_radius_mm=HEAT_RADIUS_MM)
+    return config
+
+
 def choose_rover(
-    simulate: bool, rover_arg: Optional[str], source_arg: Optional[str], config: Config
-) -> tuple[Optional[RealLink], str]:
+    simulate: bool,
+    rover_arg: Optional[str],
+    source_arg: Optional[str],
+    config: Config,
+    blender_port: Optional[int] = None,
+) -> tuple[Optional[Link], str]:
     """The rover link and the camera source to use. The rover is `still-here.local` (or whatever
     config.toml says) unless --rover names another; --simulate uses the software rover and a webcam."""
+    if blender_port is not None:
+        if simulate or rover_arg:
+            raise ValueError("--blender cannot be combined with --simulate or --rover")
+        if not 0 < blender_port < 65536:
+            raise ValueError(f"--blender needs the twin's UDP port, from 1 to 65535, got {blender_port}")
+        return BlenderLink(blender_port), source_arg or f"blender:{blender_port}"
     if simulate:
         return None, source_arg or "0"
     host, port = config.rover_host, config.ws_port
@@ -443,9 +497,14 @@ def choose_rover(
 def main(argv: Optional[Sequence[str]] = None) -> int:
     from aruco import load_config
 
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     parser = argparse.ArgumentParser(description="STILL HERE operator server")
     parser.add_argument("source", nargs="?", help="webcam number, stream URL or video file (default: the rover's own stream)")
     parser.add_argument("--rover", help="the rover's name or address, optionally with a port (default: config.toml, normally still-here.local)")
+    parser.add_argument("--blender", type=int, metavar="PORT", help="use the Blender twin (simulation/blender_rover.py) as the rover and the camera; PORT is its UDP port, normally 8766")
+    parser.add_argument("--auto", action="store_true", help="autonomous demo: the laptop approves its own plans and learns from each run. Only with --blender")
+    parser.add_argument("--episodes", type=int, default=3, help="how many runs --auto makes on the same course (default 3)")
+    parser.add_argument("--remember", action="store_true", help="with --auto: start from what past runs taught (experience.json) instead of untrained")
     parser.add_argument("--simulate", action="store_true", help="use the software rover and a webcam, with no real rover")
     parser.add_argument("--host", default="127.0.0.1", help="use 0.0.0.0 to open the pages to phones and other laptops on the same Wi-Fi")
     parser.add_argument("--token", help="the access token for devices other than this laptop (default: a new one each start)")
@@ -461,12 +520,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("No calibration.json: using a flat scale from the block size. "
               "For a camera at an angle, run calibrate.py.")
     try:
-        link, source = choose_rover(args.simulate, args.rover, args.source, config)
+        link, source = choose_rover(args.simulate, args.rover, args.source, config, blender_port=args.blender)
+        if args.blender is not None:
+            config = config_for_blender(config)
     except ValueError as error:
         print(error, file=sys.stderr)
         return 1
+    if args.auto and args.blender is None:
+        print("--auto only runs against the Blender twin (--blender PORT). It will not drive a real rover.", file=sys.stderr)
+        return 1
+    if args.auto and args.episodes < 1:
+        print("--episodes must be at least 1", file=sys.stderr)
+        return 1
     print(f"Rover: {link.address}" if link is not None else "Rover: the simulated rover (--simulate)")
     print(f"Camera: {source}")
+    if args.auto:
+        print(f"Autonomous demo: {args.episodes} runs on the same course; the laptop approves its own plans and learns. "
+              "Press Stop on the page to take over.")
     token = access_token_for(args.host, args.token)
     print(f"On this laptop:  http://127.0.0.1:{args.port}/")
     if token is not None:
@@ -480,7 +550,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     uvicorn.run(
         create_app(
             source, config, calibration=calibration, link=link, access_token=token,
-            experience=Experience(EXPERIENCE_FILE),
+            experience=Experience(EXPERIENCE_FILE if (args.remember or not args.auto) else None),
+            autopilot_episodes=args.episodes if args.auto else None,
         ), host=args.host, port=args.port
     )
     return 0

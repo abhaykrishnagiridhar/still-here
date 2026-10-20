@@ -10,6 +10,7 @@
 //   help                    list the commands
 //   scan                    find the servo driver on its I2C bus. Expect 0x40.
 //   servo <ch> <angle>      move servo channel ch (0 to 15) to angle (10 to 170), slowly
+//   pwm <ch> <on|off>       hold one channel's output fully high (3.3 V) or low, to test the chip with a meter
 //   off                     let go of all servos (they go limp)
 //   motor <L|R> <f|r|s>     left or right wheels forward, reverse or stop. Stops itself after 1.5 s.
 //   batt                    pack voltage from the divider (needs the divider fitted)
@@ -160,16 +161,36 @@ void doServo(int channel, int angle) {
   Serial.printf("  channel %d at %d degrees\n", channel, angle);
 }
 
+// Holds one output fully on or off (a steady 3.3 V or 0 V), so a meter on the channel's signal pin
+// shows whether the chip drives its outputs at all, with no servo needed.
+void doPwm(int channel, bool on) {
+  if (channel < 0 || channel > 15) return void(Serial.println("  channel must be 0 to 15"));
+  if (!pcaReady) {
+    if (!pcaBegin()) return void(Serial.println("  servo driver not found. Run: scan"));
+    pcaReady = true;
+  }
+  if (on) pcaSetTicks(channel, 4096, 0);  // full on
+  else pcaSetTicks(channel, 0, 4096);     // full off
+  servoAngle[channel] = -1;
+  Serial.printf("  channel %d output held %s. Meter on its yellow pin: about %s.\n", channel, on ? "HIGH" : "LOW", on ? "3.3 V" : "0 V");
+}
+
 void handle(String command) {
   command.trim();
   if (command == "help") {
-    Serial.println("  scan | servo <ch> <angle> | off | motor <L|R> <f|r|s> | batt | sensors | stop");
+    Serial.println("  scan | servo <ch> <angle> | pwm <ch> <on|off> | off | motor <L|R> <f|r|s> | batt | sensors | stop");
   } else if (command == "scan") {
     doScan();
   } else if (command.startsWith("servo ")) {
     int ch = -1, angle = -1;
     sscanf(command.c_str(), "servo %d %d", &ch, &angle);
     doServo(ch, angle);
+  } else if (command.startsWith("pwm ")) {
+    int ch = -1;
+    char state[8] = "";
+    sscanf(command.c_str(), "pwm %d %7s", &ch, state);
+    if (String(state) == "on" || String(state) == "off") doPwm(ch, String(state) == "on");
+    else Serial.println("  usage: pwm 3 on   (or off)");
   } else if (command == "off") {
     servosOff();
     Serial.println("  servos released");

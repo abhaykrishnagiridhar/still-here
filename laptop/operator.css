@@ -140,7 +140,7 @@
 .pad {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-areas: ". up ." "left . right" ". down .";
+  grid-template-areas: "ul up ur" "left stop right" "dl down dr";
   gap: 10px;
   margin: 0 0 20px;
   max-width: 24rem;
@@ -169,6 +169,43 @@
 .pad-key.left { grid-area: left; }
 .pad-key.right { grid-area: right; }
 .pad-key.down { grid-area: down; }
+.pad-key.ul { grid-area: ul; }
+.pad-key.ur { grid-area: ur; }
+.pad-key.dl { grid-area: dl; }
+.pad-key.dr { grid-area: dr; }
+.pad-key.stop { grid-area: stop; border-color: #7a2b2b; }
+.pad-key.stop:hover, .pad-key.stop:active { background: #7a2b2b; border-color: #a33; }
+.hint { margin: 0 0 16px; font-size: 14px; color: var(--color-ash-gray); max-width: 30rem; }
+.link-row { margin: 0 0 28px; max-width: 30rem; }
+.link-row .slider { margin: 14px 0 6px; }
+.link-row .slider:first-child { margin-top: 0; }
+.camera img[hidden] { display: none; }
+.link-fields { display: flex; gap: 10px; }
+.link-row input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  font: inherit;
+  color: var(--color-bone-white);
+  background: #151515;
+  border: 1px solid #333;
+  border-radius: 8px;
+}
+.link-row input:focus-visible { outline: 2px solid var(--color-saffron-spark); outline-offset: 2px; }
+.link-fields input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 14px;
+  font: inherit;
+  color: var(--color-bone-white);
+  background: #151515;
+  border: 1px solid #333;
+  border-radius: 8px;
+}
+.link-fields input:focus-visible { outline: 2px solid var(--color-saffron-spark); outline-offset: 2px; }
+.link-fields .button { cursor: pointer; font-family: inherit; }
 .slider {
   display: flex;
   justify-content: space-between;
@@ -179,3 +216,7 @@
 input[type="range"] { width: 100%; accent-color: var(--color-electric-iris); min-height: 28px; }
 input[type="range"]:disabled { opacity: 0.35; }
 .button.wide { width: 100%; justify-content: center; margin-top: 18px; cursor: pointer; font-family: inherit; }
+
+.steps .why { color: var(--color-saffron-spark); text-align: right; }
+.steps .good { color: #55c9ad; text-align: right; }
+.runs-note { font-size: 15px; margin: 0 0 12px; color: var(--color-silver-mist); }

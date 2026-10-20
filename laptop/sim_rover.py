@@ -105,7 +105,13 @@ class SimRover:
         blocks: Sequence[Block] = (),
         heat_zones: Sequence[HeatZone] = (),
         survivor: Optional[tuple[float, float]] = None,
+        buggy_half_width_mm: Optional[float] = None,
     ):
+        # A hidden truth for demos: the buggy is really this wide (half of it, mm). The planner is only told the
+        # width it was configured with, so a block it judged safe beside the path can still be brushed when the
+        # buggy drives to the survivor. None (the default) means the simulation never checks.
+        self._buggy_half_width = buggy_half_width_mm
+        self._initial_blocks = tuple(blocks)
         self.t = 0.0
         self.x = 0.0  # world position of the rover centre (mm)
         self.y = 0.0
@@ -131,6 +137,11 @@ class SimRover:
         self._current_step: Optional[PlanStep] = None
         self._step_failure: Optional[str] = None
         self._finished_offline = False
+
+    @property
+    def plan_running(self) -> bool:
+        """True while the rover is working through a stored plan (from plan_start to the end or an abort)."""
+        return self._running
 
     # ------------------------------------------------------------------ frames
     def to_arm_frame(self, wx: float, wy: float) -> tuple[float, float]:
@@ -158,6 +169,7 @@ class SimRover:
             "plan": self._on_plan,
             "plan_start": self._on_plan_start,
             "abort": self._on_abort,
+            "reset_world": self._on_reset_world,
         }.get(message.get("type"))
         return handler(message) if handler else []  # unknown types are ignored
 
@@ -230,6 +242,45 @@ class SimRover:
         self._target = dict(self.pose)
         return [{"type": "event", "code": "aborted", "detail": ""}]
 
+    def _on_reset_world(self, message: dict) -> list[dict]:
+        """Simulation only: put the course back as it was at the start (blocks in place, arm home, nothing
+        stored), so the autonomy demo can run the same course again and show what was learned."""
+        self.blocks = {b.id: WorldBlock(b) for b in self._initial_blocks}
+        self.carrying = None
+        self._running = False
+        self._actions = []
+        self._current_step = None
+        self._step_failure = None
+        self._step_index = 0
+        self._stored = None
+        self._finished_offline = False
+        self.wheels = (0.0, 0.0)
+        self.pose = dict(HOME_POSE)
+        self._target = dict(HOME_POSE)
+        return [{"type": "event", "code": "world_reset", "detail": ""}]
+
+    def _bumped_block(self) -> Optional[int]:
+        """The block the buggy would brush on a straight drive to the survivor, or None. Blocks that stand
+        beyond the survivor, or behind the rover, are not on the way."""
+        if self._buggy_half_width is None or self.survivor is None:
+            return None
+        sx, sy = self.to_arm_frame(*self.survivor)
+        length = hypot(sx, sy)
+        if length < 1e-6:
+            return None
+        hit: Optional[tuple[float, int]] = None
+        for wb in self.blocks.values():
+            if wb.block.id == self.carrying:
+                continue
+            ax, ay = self.to_arm_frame(wb.block.x, wb.block.y)
+            along = (ax * sx + ay * sy) / length
+            if not 0.0 < along <= length:
+                continue
+            gap = abs(ax * sy - ay * sx) / length - BLOCK_SIZE / 2  # sideways room between its edge and the line
+            if gap < self._buggy_half_width and (hit is None or gap < hit[0]):
+                hit = (gap, wb.block.id)
+        return hit[1] if hit else None
+
     # ------------------------------------------------------------------ plan runner
     def _begin_step(self) -> None:
         steps = self._stored[1] if self._stored else ()
@@ -270,6 +321,9 @@ class SimRover:
         self._step_index += 1
         self._begin_step()
         if not self._running:
+            bumped = self._bumped_block()
+            if bumped is not None:  # on the drive to the survivor the buggy brushed a block it was not told about
+                out.append({"type": "event", "code": "bump", "detail": f"block_{bumped}"})
             if self._link_up:
                 out.append({"type": "event", "code": "plan_finished", "detail": ""})
             else:

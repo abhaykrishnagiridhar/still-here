@@ -159,3 +159,75 @@ def test_an_empty_baseline_only_watches_for_new_blocks():
 def test_nonsense_settings_are_refused(bad):
     with pytest.raises(ValueError):
         watch(**bad)
+
+
+def test_a_block_appearing_at_any_drop_slot_is_expected():
+    slots = ((90.0, -172.0), (40.0, -172.0), (50.0, 172.0))
+    watch = SceneWatch([], drop_mm=slots)
+    arrived = [Block(9, 9, 52.0, 170.0, 1)]  # next to the third slot
+
+    assert watch.check(arrived, set(), now=0.0) is None
+    assert watch.check(arrived, set(), now=5.0) is None
+
+
+def test_a_block_far_from_every_drop_slot_is_still_a_surprise():
+    watch = SceneWatch([], drop_mm=((90.0, -172.0), (40.0, -172.0)))
+    stray = [Block(9, 9, 200.0, 100.0, 1)]
+
+    watch.check(stray, set(), now=0.0)
+
+    assert watch.check(stray, set(), now=5.0) is not None
+
+
+# ---- a block seen again under a new id is still that block -------------------------------------
+
+
+def test_a_block_that_comes_back_under_a_new_id_in_the_same_place_is_still_that_block():
+    w = watch()
+    current = same(2) + [block(9, 151, 1)]  # block 2 was hidden for a moment and the tracker numbered it again
+
+    assert w.check(current, set(), now=0.0) is None
+    assert w.check(current, set(), now=10.0) is None
+
+
+def test_a_new_id_far_from_every_missing_block_is_still_a_surprise():
+    w = watch()
+    current = same(2) + [block(9, 250, 150)]  # nothing was ever there
+
+    w.check(current, set(), now=0.0)
+
+    assert w.check(current, set(), now=10.0) is not None
+
+
+def test_two_renumbered_blocks_are_matched_to_the_nearest_missing_one_each():
+    w = watch()
+    current = same(1, 2) + [block(8, 150, 2), block(9, 150, -78)]
+
+    assert w.check(current, set(), now=0.0) is None
+    assert w.check(current, set(), now=10.0) is None
+
+
+def test_a_stranger_next_to_a_block_that_is_still_in_view_is_not_taken_for_it():
+    w = watch()
+    current = list(BASELINE) + [block(9, 152, 2)]  # block 2 is right there, so this is a second block
+
+    w.check(current, set(), now=0.0)
+
+    assert w.check(current, set(), now=10.0) is not None
+
+
+def test_a_renumbered_block_that_has_really_moved_is_still_reported():
+    w = watch()
+    current = same(2) + [block(9, 150, 40)]  # 40 mm from where block 2 was: not the same block
+
+    w.check(current, set(), now=0.0)
+
+    assert w.check(current, set(), now=10.0) is not None
+
+
+def test_a_block_being_picked_that_comes_back_under_a_new_id_is_still_that_block():
+    w = watch()
+    current = same(2) + [block(9, 152, 1)]  # the arm hid block 2 as it reached for it, and it was numbered again
+
+    assert w.check(current, {2}, now=0.0) is None
+    assert w.check(current, {2}, now=10.0) is None

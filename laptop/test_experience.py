@@ -143,3 +143,10 @@ def test_the_explanation_reads_naturally_for_a_single_run():
     exp = Experience(step_mm=10)
     exp.record(facts("r0", obstacles=2))
     assert exp.explanation == "Corridor widened by 10 mm each side: the last run had trouble."
+
+
+def test_a_bump_the_rover_reported_is_trouble_even_when_the_camera_says_the_way_is_clear():
+    exp = Experience(step_mm=10)
+    run = exp.record({**facts("r0"), "bumped": True})
+    assert run is not None and run.trouble and run.why == "the rover hit something"
+    assert exp.extra_clearance_mm == 10.0

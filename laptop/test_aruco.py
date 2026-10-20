@@ -241,3 +241,22 @@ def test_the_declared_python_version_is_one_that_has_the_toml_reader():
 
     # aruco.py reads config.toml with tomllib, which only exists from Python 3.11
     assert int(re.search(r"(\d+)\.(\d+)", declared).group(2)) >= 11
+
+
+def test_the_heat_keep_out_radius_defaults_to_the_projects_assumption():
+    assert Config().heat_radius_mm == 100.0
+
+
+def test_a_config_file_can_set_the_heat_keep_out_radius(tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_text("[hazard]\nheat_radius_mm = 45\n", encoding="utf-8")
+
+    assert load_config(path).heat_radius_mm == 45.0
+
+
+def test_a_heat_radius_of_zero_is_refused(tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_text("[hazard]\nheat_radius_mm = 0\n", encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        load_config(path)

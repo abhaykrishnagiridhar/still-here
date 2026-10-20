@@ -19,7 +19,7 @@ import hashlib
 import json
 import time
 from dataclasses import dataclass
-from typing import Callable, Optional, Protocol
+from typing import Callable, Optional, Protocol, Sequence
 
 from plan_message import build_abort_message, build_plan_message, build_plan_start_message
 from report import build_report, choose_summary, render_report
@@ -28,7 +28,14 @@ from grip_watch import GripWatch
 from scene_watch import SceneWatch
 
 # Where picked blocks are put down, in the arm frame (mm). An assumption until the rover is built.
-DROP_POINT_MM = (100.0, -90.0)
+# It must lie outside the buggy's corridor (240 mm wide, so more than 160 mm off the centre line once a
+# block's own size and some spare room are counted), or the camera would see each dropped block as
+# still in the way and never confirm the path is clear. It must also stay inside the arm's reach.
+# Each block gets its own slot, taken in turn, so blocks are never put down on top of one another. Slots are 50 mm
+# apart or more and clear of the single block the demo leaves at the side. Five slots: the demo's second run
+# moves five blocks once the corridor has been widened.
+DROP_SLOTS_MM = ((100.0, -172.0), (50.0, -172.0), (55.0, 172.0), (5.0, 172.0), (0.0, -172.0))
+DROP_POINT_MM = DROP_SLOTS_MM[0]
 BLOCK_HEIGHT_MM = 40.0
 CONFIRM_TIMEOUT_S = 3.0  # how long the rover has to confirm a plan before it is cancelled
 VERIFY_PICTURES = 3  # clear pictures in a row that confirm the way is open
@@ -70,15 +77,19 @@ class Operator:
         link: Link,
         *,
         block_mm: float = BLOCK_HEIGHT_MM,
-        drop_mm: tuple[float, float] = DROP_POINT_MM,
+        drop_mm: Optional[tuple[float, float]] = None,
+        drop_slots: Sequence[tuple[float, float]] = DROP_SLOTS_MM,
         clock: Callable[[], float] = time.monotonic,
+        wall_clock: Callable[[], float] = time.time,
     ) -> None:
         self._link = link
         self._block_mm = block_mm
-        self._drop = drop_mm
+        self._slots = (drop_mm,) if drop_mm is not None else tuple(drop_slots)  # one point only if asked for
         self._clock = clock
-        # Unique per start, so a plan the rover still holds from an earlier session is never mistaken for this one.
-        self._next_plan_id = int(clock() * 10) % 1_000_000 + 1
+        # Unique per start (it comes from the calendar clock, not from the time since boot), so a plan the rover
+        # still holds from an earlier session is never mistaken for this one.
+        self._next_plan_id = int(wall_clock() * 10) % 1_000_000 + 1
+        self._abort_pending = False  # an abort that has not reached the rover yet, so it is sent again
         self._survivor_hint: Optional[tuple[int, int]] = None
         self._queued_facts: list[dict] = []  # runs that were stopped and replaced, waiting to be written up
         self._reset_run()
@@ -106,6 +117,7 @@ class Operator:
         self._current_step = 0  # the step the rover says it is on
         self._notice: Optional[str] = None  # why the last run was stopped, shown with the fresh plan
         self._disturbed = False  # a block we were not touching moved or vanished during the run
+        self._bumped: Optional[str] = None  # what the rover brushed on its way to the survivor, if it said so
 
     def reset(self) -> None:
         """Start a fresh run. The tapped survivor is forgotten with it."""
@@ -150,11 +162,16 @@ class Operator:
         if reason is not None:
             self._replan(reason)
 
+    def _send_abort(self) -> None:
+        """Ask the rover to stop. If the link is down the message is not delivered, so keep asking
+        (see tick) until it is: the rover must not carry on with a plan the person has stopped."""
+        self._abort_pending = self._link.send(build_abort_message()) is False
+
     def _replan(self, reason: str) -> None:
         """The scene no longer matches the approved plan. Stop the rover, write the run up as a
         safe stop, and go back to a fresh plan from the latest picture. The person must approve
         it: the rover never carries on with a plan nobody has looked at."""
-        self._link.send(build_abort_message())
+        self._send_abort()
         self._phase = "aborted"
         self._note = f"Stopped: {reason}."
         self._disturbed = "moved" in reason or "no longer seen" in reason
@@ -172,6 +189,13 @@ class Operator:
             self._verified = True
             self._phase = "done"
             self._note = "Confirmed by the camera: the way to the survivor is clear."
+            if self._bumped is not None:
+                self._note += f" But the rover brushed {self._bumped} on the way, so next time it leaves more room."
+
+    @property
+    def brushed(self) -> Optional[str]:
+        """What the rover said it brushed on the way to the survivor in this run (for example "block_5")."""
+        return self._bumped
 
     def busy(self) -> bool:
         """True while an approved plan is waiting to start, running, or being checked."""
@@ -209,8 +233,9 @@ class Operator:
         if key != view["key"]:
             return Outcome(False, "The plan changed since you looked. Check it again.")
         steps: list[dict] = []
-        for item in view["order"]:
-            for action, x, y in (("pick", item["x"], item["y"]), ("drop", self._drop[0], self._drop[1])):
+        for number, item in enumerate(view["order"]):
+            slot = self._slots[number % len(self._slots)]
+            for action, x, y in (("pick", item["x"], item["y"]), ("drop", slot[0], slot[1])):
                 steps.append({"id": len(steps) + 1, "action": action, "x": x, "y": y, "z": self._block_mm / 2})
         plan_id = self._next_plan_id
         message = build_plan_message(plan_id, steps)  # checked before it can reach the rover
@@ -222,28 +247,33 @@ class Operator:
         self._frozen_survivor = path[-1] if path else None
         self._results = {}
         scene = getattr(self._latest, "scene", None)
-        self._watch = SceneWatch(scene.blocks, drop_mm=self._drop) if scene is not None else None
+        self._watch = SceneWatch(scene.blocks, drop_mm=self._slots) if scene is not None else None
         self._grip = GripWatch(scene.blocks) if scene is not None else None
         self._current_step = 0
         self._notice = None  # the person has seen why the last run stopped and approved the new plan
         self._approved_at = self._clock()
         self._phase = "waiting"
         self._note = "Waiting for the rover to confirm the plan."
+        self._abort_pending = False  # the new plan replaces any abort that never got through
         self._link.send(message)
         return Outcome(True, self._note)
 
     def abort(self) -> None:
-        self._link.send(build_abort_message())
+        self._send_abort()
         if self._phase in BUSY_PHASES:
             self._phase = "aborted"
             self._note = "Stopped by the operator."
+            if self._abort_pending:
+                self._note += " The rover has not heard it yet: the link is down. It is asked again until it does."
 
     def tick(self) -> None:
         """Call regularly: gives up on a rover that never confirms the plan, and calls a run
         unverified when the camera never confirms the way is clear."""
         now = self._clock()
+        if self._abort_pending:
+            self._send_abort()
         if self._phase == "waiting" and now - self._approved_at > CONFIRM_TIMEOUT_S:
-            self._link.send(build_abort_message())
+            self._send_abort()
             self._phase = "aborted"
             self._note = "The rover did not confirm the plan, so it was cancelled."
         elif self._phase == "verifying" and now - self._finished_at > VERIFY_TIMEOUT_S:
@@ -258,10 +288,12 @@ class Operator:
             if kind == "state":
                 self._on_state(message)
             elif kind == "step_done" and message.get("plan_id") == self._plan_id:
-                self._results[message["step_id"]] = (bool(message["ok"]), message.get("reason", ""))
-                self._watch_the_grip(message)
+                step_id = message.get("step_id")
+                if isinstance(step_id, int) and not isinstance(step_id, bool):  # ignore a malformed message
+                    self._results[step_id] = (bool(message.get("ok")), str(message.get("reason") or ""))
+                    self._watch_the_grip(message)
             elif kind == "event":
-                self._on_event(message.get("code"))
+                self._on_event(message.get("code"), message.get("detail"))
             elif kind == "sensors":
                 self._count_obstacle_trips(message)
 
@@ -281,7 +313,8 @@ class Operator:
         """Each time an IR obstacle sensor goes from quiet to tripped counts once."""
         if self._plan_id is None:
             return
-        tripped = any((message.get("ir_obstacle") or {}).values())
+        sensors = message.get("ir_obstacle")
+        tripped = any(sensors.values()) if isinstance(sensors, dict) else False
         if tripped and not self._obstacle_active:
             self._obstacles += 1
         self._obstacle_active = tripped
@@ -294,7 +327,7 @@ class Operator:
             self._phase = "running"
             self._note = "Running the approved plan."
 
-    def _on_event(self, code: Optional[str]) -> None:
+    def _on_event(self, code: Optional[str], detail: object = "") -> None:
         if code == "plan_finished" and self._phase == "running":
             self._phase = "verifying"
             self._finished_at = self._clock()
@@ -306,6 +339,8 @@ class Operator:
         elif code == "bad_plan" and self._phase in BUSY_PHASES:
             self._phase = "aborted"
             self._note = "The rover refused the plan."
+        elif code == "bump" and self._phase in BUSY_PHASES:
+            self._bumped = detail if isinstance(detail, str) and detail else "an obstacle"
         elif code == "link_lost":
             self._link_up = False
         elif code == "link_restored":
@@ -352,6 +387,7 @@ class Operator:
             "obstacles_detected": self._obstacles,
             "safe_stop_triggered": self._phase == "aborted",
             "disturbed_neighbour": self._disturbed,
+            "bumped": self._bumped is not None,
         }
 
     def take_finished_facts(self) -> Optional[dict]:
@@ -400,6 +436,8 @@ class Operator:
         if report["survivor_mm"] is not None:
             x, y = report["survivor_mm"]
             lines.append(f"Survivor at ({x:.0f}, {y:.0f}) mm from the rover.")
+        if self._bumped is not None:
+            lines.append(f"On the way to the survivor the rover brushed {self._bumped}.")
         for item in report["picked"]:
             where = f"block_{item['id']} at ({item['x']:.0f}, {item['y']:.0f}) mm"
             status = "moved out of the way" if item["ok"] else f"not moved ({item['reason']})"

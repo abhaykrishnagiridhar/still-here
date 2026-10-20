@@ -317,3 +317,48 @@ def test_extra_room_learned_from_past_runs_widens_the_corridor():
             last[name] = pipeline.process(frame_with(), i / FPS, survivor_hint=(320, 100))
 
     assert len(last["wider"].result.order) > len(last["base"].result.order)
+
+
+def test_the_fire_keep_out_radius_comes_from_the_config():
+    from aruco import Config
+
+    pipeline = Pipeline(Config(heat_radius_mm=45.0))
+    last = None
+    for i in range(int(2.0 * FPS)):
+        last = pipeline.process(frame_with(fire=(520, 120)), i / FPS, survivor_hint=(320, 100))
+
+    assert last.scene.heat_zones and all(zone.radius == 45.0 for zone in last.scene.heat_zones)
+
+
+# --- a slow camera must not make a vanished block linger for seconds ----------------------
+
+
+def blocks_seen(frames_per_second, missing_for_s):
+    """Show three blocks, then take one away for a while; how many blocks are planned at the end?"""
+    pipeline = Pipeline()
+    step = 1.0 / frames_per_second
+    t = 0.0
+    for _ in range(int(2.5 * frames_per_second)):
+        last = pipeline.process(frame_with(), t, survivor_hint=(320, 100))
+        t += step
+    for _ in range(max(1, int(missing_for_s * frames_per_second))):
+        last = pipeline.process(frame_with(blocks=BLOCKS[:2]), t, survivor_hint=(320, 100))
+        t += step
+    return len(last.result.order)
+
+
+def test_a_fast_camera_forgives_a_block_that_is_hidden_for_a_moment():
+    assert blocks_seen(30.0, 0.2) == 3
+
+
+def test_a_slow_camera_forgets_a_vanished_block_after_the_same_short_time():
+    # Ten missed pictures is a third of a second at 30 per second, but two seconds at 5 per second.
+    assert blocks_seen(5.0, 0.8) == 2
+
+
+def test_the_patience_never_drops_below_two_pictures():
+    from vision import patience_frames
+
+    assert patience_frames(0.5) == 2
+    assert patience_frames(30.0) == 10
+    assert patience_frames(120.0) == 10

@@ -96,8 +96,110 @@ export function toneFor(phase: string, linkUp: boolean, verified: boolean | null
   return "";
 }
 
+// One line of the "learning across runs" list: what a finished run did, and what the laptop took from it.
+export interface EpisodeFacts {
+  number: number;
+  moved: number;
+  outcome: string;
+  brushed: string | null;
+  corridor_mm: number;
+  next_corridor_mm: number;
+}
+
+export function episodeLine(episode: EpisodeFacts): { left: string; right: string; tone: Tone } {
+  const left = `Run ${episode.number}: moved ${episode.moved} block${episode.moved === 1 ? "" : "s"}`;
+  if (episode.outcome === "bumped") {
+    return {
+      left,
+      right: `brushed ${episode.brushed ?? "a block"}, next corridor ${episode.next_corridor_mm} mm`,
+      tone: "warn",
+    };
+  }
+  if (episode.outcome === "clean") {
+    return { left, right: `clean, corridor ${episode.corridor_mm} mm`, tone: "ok" };
+  }
+  return { left, right: "the camera could not confirm the way is clear", tone: "warn" };
+}
+
 export const BUSY_PHASES = ["waiting", "running", "verifying"];
 export const END_PHASES = ["done", "aborted"];
+
+// --- The Manual tab talks straight to the rover's own Wi-Fi (firmware/rover_arm_ap.cpp) ---------
+
+export type DriveDirection = Direction | "forward-left" | "forward-right" | "back-left" | "back-right";
+
+// Both boards join the same phone hotspot and announce these names (rover_arm_ap.cpp, rover_link.cpp).
+// If the name does not resolve on a network, type the IP the board prints on its serial port.
+export const DEFAULT_ROVER_ADDRESS = "still-arm.local";
+export const DEFAULT_CAMERA_ADDRESS = "still-here.local";
+export const SERVO_COUNT = 5; // base, shoulder, elbow, wrist, gripper
+
+const DRIVE_CODES: Record<DriveDirection, string> = {
+  forward: "F",
+  back: "B",
+  left: "L",
+  right: "R",
+  "forward-left": "Q",
+  "forward-right": "E",
+  "back-left": "Z",
+  "back-right": "C",
+};
+
+// The one-letter code the rover's /drive endpoint understands. "S" is stop.
+export function driveCode(direction: DriveDirection): string {
+  return DRIVE_CODES[direction];
+}
+
+// The speed slider is 10 to 100 percent; the rover wants 100 to 255 (below 100 the motors just hum).
+export function driveSpeedValue(percent: number): number {
+  const p = clamp(percent, 10, 100);
+  return Math.round(100 + ((p - 10) / 90) * 155);
+}
+
+// What a person typed for the rover's address, as host or host:port, or null if it cannot be one.
+// Accepts "192.168.4.1", "http://192.168.4.1/" and "rover.local:80". Nothing else is let through,
+// so a typo can never send commands somewhere unexpected.
+export function cleanAddress(text: string): string | null {
+  const bare = text.trim().replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
+  return /^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:\d{1,5})?$/.test(bare) ? bare : null;
+}
+
+export type RoverParams = Record<string, string | number>;
+
+export function roverUrl(address: string, path: string, params: RoverParams = {}): string {
+  const query = Object.entries(params)
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+    .join("&");
+  return `http://${address}${path}${query === "" ? "" : `?${query}`}`;
+}
+
+// Where the camera board serves its video (mjpeg_server.cpp).
+export function streamUrl(address: string): string {
+  return roverUrl(address, "/stream");
+}
+
+export interface ArmState {
+  a: number[]; // where each joint is heading, in degrees
+  min: number[];
+  max: number[];
+}
+
+// The rover's /state answer, or null when it is not what we expect (so the page can say so).
+export function parseArmState(data: unknown): ArmState | null {
+  if (typeof data !== "object" || data === null) return null;
+  const record = data as Record<string, unknown>;
+  const lists: number[][] = [];
+  for (const key of ["a", "min", "max"]) {
+    const list = record[key];
+    if (!Array.isArray(list) || list.length !== SERVO_COUNT || !list.every((n) => typeof n === "number" && Number.isFinite(n))) {
+      return null;
+    }
+    lists.push(list as number[]);
+  }
+  const [a, min, max] = lists;
+  if (!a || !min || !max) return null;
+  return { a, min, max };
+}
 
 // A click or tap on the picture, as a position in the camera's own pixels.
 export function toFrame(clientX: number, clientY: number, box: Box, frame: { w: number; h: number }) {

@@ -26,3 +26,5 @@ package-lock.json
 .pytest_cache.zip
 reference from chatgpt/
 laptop/experience.json
+laptop/models/
+.claude/settings.local.json

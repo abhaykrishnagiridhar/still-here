@@ -186,6 +186,16 @@
   }
 
   startAtTop();
+  // The Simulation link points at the phone page on this laptop. Opened from a phone through the laptop's
+  // address, it must use that address, not 127.0.0.1 (which would mean the phone itself).
+  function followThisHost() {
+    if (location.protocol !== "http:" || !location.hostname) return;
+    document.querySelectorAll("a[data-local-port]").forEach((link) => {
+      link.href = "http://" + location.hostname + ":" + link.dataset.localPort + "/";
+    });
+  }
+
+  followThisHost();
   sceneParticles();
   ambientParticles();
   linkFadeToScroll();

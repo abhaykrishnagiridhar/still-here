@@ -696,3 +696,62 @@ def test_a_run_the_operator_stopped_teaches_nothing(written):
     app.state.advance(0.05)
 
     assert experience.runs == ()
+
+
+# --- the Blender twin as the rover and the camera ---------------------------------------
+
+from aruco import Config  # noqa: E402
+
+
+def test_blender_makes_the_twin_both_the_rover_and_the_camera():
+    from blender_link import BlenderLink
+
+    link, source = server.choose_rover(False, None, None, Config(), blender_port=8767)
+    try:
+        assert isinstance(link, BlenderLink)
+        assert source == "blender:8767"
+    finally:
+        link.close()
+
+
+def test_a_camera_named_on_the_command_line_still_wins_with_blender():
+    link, source = server.choose_rover(False, None, "0", Config(), blender_port=8767)
+    try:
+        assert source == "0"
+    finally:
+        link.close()
+
+
+@pytest.mark.parametrize("port", [0, 70000, -1])
+def test_a_blender_port_that_cannot_exist_is_refused(port):
+    with pytest.raises(ValueError):
+        server.choose_rover(False, None, None, Config(), blender_port=port)
+
+
+def test_blender_cannot_be_combined_with_a_real_rover_or_the_software_rover():
+    with pytest.raises(ValueError):
+        server.choose_rover(False, "192.168.0.50", None, Config(), blender_port=8767)
+    with pytest.raises(ValueError):
+        server.choose_rover(True, None, None, Config(), blender_port=8767)
+
+
+def test_the_blender_demo_uses_the_table_top_fire_radius_unless_the_config_sets_one():
+    from demo_world import HEAT_RADIUS_MM
+
+    assert server.config_for_blender(Config()).heat_radius_mm == HEAT_RADIUS_MM
+    custom = Config(heat_radius_mm=70.0)
+    assert server.config_for_blender(custom).heat_radius_mm == 70.0
+
+
+# --- who may reach the server -----------------------------------------------------------
+
+
+def test_a_request_that_arrives_under_a_public_name_is_refused(client):
+    reply = client.get("/api/state", headers={"host": "rebind.evil.example:8000"})
+
+    assert reply.status_code == 400
+
+
+def test_a_request_to_the_laptops_own_address_is_served(client):
+    assert client.get("/api/state", headers={"host": "127.0.0.1:8000"}).status_code == 200
+

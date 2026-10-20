@@ -23,6 +23,26 @@
                            
  
 
+// One finished run of autonomous mode (autopilot.py).
+                              
+                 
+                
+                                                       
+                         
+                      
+                           
+ 
+
+                                
+                  
+                  
+                   
+                  
+                      
+                   
+                         
+ 
+
                         
                 
                   
@@ -39,6 +59,7 @@
                            
                         
                       
+                                                                                    
  
 
                              

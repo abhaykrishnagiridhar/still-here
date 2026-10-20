@@ -5,8 +5,17 @@ import { test } from "node:test";
 import {
   BUSY_PHASES,
   END_PHASES,
+  DEFAULT_CAMERA_ADDRESS,
+  DEFAULT_ROVER_ADDRESS,
+  streamUrl,
+  cleanAddress,
   clamp,
+  episodeLine,
+  driveCode,
   driveFor,
+  driveSpeedValue,
+  parseArmState,
+  roverUrl,
   headlineFor,
   keyDirection,
   roverNotice,
@@ -100,3 +109,82 @@ test("a stopped run is explained before what is happening now", () => {
   assert.equal(withNotice(null, "2 blocks to remove."), "2 blocks to remove.");
   assert.equal(withNotice("The rover was stopped.", "2 blocks to remove."), "The rover was stopped. 2 blocks to remove.");
 });
+
+test("each drive button sends the letter the rover firmware expects", () => {
+  assert.equal(driveCode("forward"), "F");
+  assert.equal(driveCode("back"), "B");
+  assert.equal(driveCode("left"), "L");
+  assert.equal(driveCode("right"), "R");
+  assert.equal(driveCode("forward-left"), "Q");
+  assert.equal(driveCode("forward-right"), "E");
+  assert.equal(driveCode("back-left"), "Z");
+  assert.equal(driveCode("back-right"), "C");
+});
+
+test("the speed slider maps onto the rover's 100 to 255 range and never leaves it", () => {
+  assert.equal(driveSpeedValue(10), 100);
+  assert.equal(driveSpeedValue(100), 255);
+  assert.equal(driveSpeedValue(55), 178);
+  assert.equal(driveSpeedValue(0), 100);
+  assert.equal(driveSpeedValue(500), 255);
+});
+
+test("an address is cleaned to host or host:port, and anything odd is refused", () => {
+  assert.equal(cleanAddress(DEFAULT_ROVER_ADDRESS), "still-arm.local");
+  assert.equal(cleanAddress(DEFAULT_CAMERA_ADDRESS), "still-here.local");
+  assert.equal(cleanAddress("192.168.4.1"), "192.168.4.1");
+  assert.equal(streamUrl("still-here.local"), "http://still-here.local/stream");
+  assert.equal(cleanAddress("  http://192.168.4.1/  "), "192.168.4.1");
+  assert.equal(cleanAddress("rover.local:80"), "rover.local:80");
+  assert.equal(cleanAddress(""), null);
+  assert.equal(cleanAddress("192.168.4.1/drive?d=F"), "192.168.4.1");
+  assert.equal(cleanAddress("a b"), null);
+  assert.equal(cleanAddress("evil.com@192.168.4.1"), null);
+  assert.equal(cleanAddress("-bad"), null);
+});
+
+test("rover URLs carry their settings in the query and escape them", () => {
+  assert.equal(roverUrl("192.168.4.1", "/stop"), "http://192.168.4.1/stop");
+  assert.equal(roverUrl("192.168.4.1", "/drive", { d: "F", v: 170 }), "http://192.168.4.1/drive?d=F&v=170");
+  assert.equal(roverUrl("x", "/servo", { a: "1&2" }), "http://x/servo?a=1%262");
+});
+
+test("the rover's state is read only when it has five joints of numbers", () => {
+  const good = { a: [90, 90, 90, 90, 90], min: [0, 30, 20, 20, 30], max: [180, 150, 160, 160, 110] };
+  assert.deepEqual(parseArmState(good), good);
+  assert.equal(parseArmState({ ...good, a: [90, 90, 90, 90] }), null);
+  assert.equal(parseArmState({ ...good, min: [0, 30, 20, 20, "x"] }), null);
+  assert.equal(parseArmState({ a: good.a }), null);
+  assert.equal(parseArmState(null), null);
+  assert.equal(parseArmState("ok"), null);
+});
+
+test("a run that brushed a block says which one and how wide the next corridor is", () => {
+  const line = episodeLine({ number: 1, moved: 4, outcome: "bumped", brushed: "block_5", corridor_mm: 240, next_corridor_mm: 260 });
+  assert.equal(line.left, "Run 1: moved 4 blocks");
+  assert.equal(line.right, "brushed block_5, next corridor 260 mm");
+  assert.equal(line.tone, "warn");
+});
+
+test("a clean run says so and shows the corridor it used", () => {
+  const line = episodeLine({ number: 2, moved: 5, outcome: "clean", brushed: null, corridor_mm: 260, next_corridor_mm: 260 });
+  assert.equal(line.left, "Run 2: moved 5 blocks");
+  assert.equal(line.right, "clean, corridor 260 mm");
+  assert.equal(line.tone, "ok");
+});
+
+test("one block is not plural", () => {
+  assert.equal(episodeLine({ number: 1, moved: 1, outcome: "clean", brushed: null, corridor_mm: 240, next_corridor_mm: 240 }).left, "Run 1: moved 1 block");
+});
+
+test("a run the camera could not confirm is not called clean", () => {
+  const line = episodeLine({ number: 3, moved: 4, outcome: "unverified", brushed: null, corridor_mm: 240, next_corridor_mm: 240 });
+  assert.equal(line.right, "the camera could not confirm the way is clear");
+  assert.equal(line.tone, "warn");
+});
+
+test("a bump with no block named still reads sensibly", () => {
+  const line = episodeLine({ number: 1, moved: 4, outcome: "bumped", brushed: null, corridor_mm: 240, next_corridor_mm: 250 });
+  assert.equal(line.right, "brushed a block, next corridor 250 mm");
+});
+

@@ -31,7 +31,7 @@ class SceneWatch:
         self,
         baseline: Sequence[Block],
         *,
-        drop_mm: tuple[float, float],
+        drop_mm: Sequence[float] | Sequence[Sequence[float]],
         move_tol_mm: float = MOVE_TOL_MM,
         moved_hold_s: float = MOVED_HOLD_S,
         missing_hold_s: float = MISSING_HOLD_S,
@@ -41,15 +41,36 @@ class SceneWatch:
         if move_tol_mm <= 0 or min(moved_hold_s, missing_hold_s, new_hold_s) < 0:
             raise ValueError("the tolerance must be greater than zero and the waits must not be negative")
         self._baseline = {b.id: b for b in baseline}
-        self._drop = drop_mm
+        # One drop point, or several: blocks put down at any of them are expected.
+        self._drops = (tuple(drop_mm),) if drop_mm and isinstance(drop_mm[0], (int, float)) else tuple(tuple(p) for p in drop_mm)
         self._tol = move_tol_mm
         self._holds = {"moved": moved_hold_s, "missing": missing_hold_s, "new": new_hold_s}
         self._drop_radius = drop_radius_mm
         self._since: dict[tuple[str, int], float] = {}  # (kind, block id) -> when it first looked wrong
 
+    def _same_blocks_by_place(self, current: dict[int, Block], handled: set[int]) -> dict[int, Block]:
+        """A block the camera lost for a moment (the arm passing over it) comes back under a new id. If an unfamiliar
+        id sits where a missing block was, within the move tolerance, it is that block: the nearest match wins."""
+        # Handled blocks count too: the arm hides a block most just as it reaches for it.
+        missing = [b for i, b in self._baseline.items() if i not in current]
+        strangers = [b for i, b in current.items() if i not in self._baseline and i not in handled]
+        if not missing or not strangers:
+            return current
+        pairs = sorted(
+            (hypot(s.x - m.x, s.y - m.y), m.id, s.id) for m in missing for s in strangers if hypot(s.x - m.x, s.y - m.y) <= self._tol
+        )
+        renamed, used_known, used_strangers = dict(current), set(), set()
+        for _distance, known_id, stranger_id in pairs:
+            if known_id in used_known or stranger_id in used_strangers:
+                continue
+            renamed[known_id] = renamed.pop(stranger_id)
+            used_known.add(known_id)
+            used_strangers.add(stranger_id)
+        return renamed
+
     def check(self, blocks: Sequence[Block], handled: set[int], now: float) -> Optional[str]:
         """A reason the scene no longer matches the plan, or None. Call with every new picture."""
-        current = {b.id: b for b in blocks}
+        current = self._same_blocks_by_place({b.id: b for b in blocks}, handled)
         wrong: dict[tuple[str, int], str] = {}
 
         for block_id, start in self._baseline.items():
@@ -66,7 +87,7 @@ class SceneWatch:
         for block_id, seen in current.items():
             if block_id in self._baseline or block_id in handled:
                 continue
-            if hypot(seen.x - self._drop[0], seen.y - self._drop[1]) <= self._drop_radius:
+            if any(hypot(seen.x - x, seen.y - y) <= self._drop_radius for x, y in self._drops):
                 continue
             wrong[("new", block_id)] = f"a new block (block_{block_id}) appeared at ({seen.x:.0f}, {seen.y:.0f}) mm"
 

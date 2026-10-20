@@ -38,6 +38,7 @@ import cv2
 import numpy as np
 
 from aruco import Config, Marker, MarkerTracker, blocks_from_markers, find_markers, load_config
+from blender_camera import BlenderCamera
 from calibrate import DEFAULT_FILE as CALIBRATION_FILE
 from calibrate import Calibration
 from calibrate import load as load_calibration
@@ -46,6 +47,7 @@ from planner import PlanResult
 from route import RoutePlan
 from scale import ScaleEstimator, block_size_ok, to_mm
 from scene import Scene, build_scene, decide, path_in_px, scene_from_blocks, view_in_px
+from serial_camera import open_serial_camera
 from stream import FrameSource
 
 Point = tuple[int, int]
@@ -58,7 +60,10 @@ MIN_FIRE_AREA = 800.0  # pixels; smaller bright blobs are not a fire
 MAX_FAILED_READS = 30  # blank frames in a row before the stream is reopened
 MAX_RECONNECTS = 5  # times a dropped network camera is reopened before giving up
 CONFIRM_FRAMES = 3  # frames in a row before a blob is believed
-MAX_MISSING_FRAMES = 10  # frames a believed blob may vanish before it is forgotten
+MAX_MISSING_FRAMES = 10  # frames a believed blob may vanish before it is forgotten (at 30 pictures a second)
+PATIENCE_S = MAX_MISSING_FRAMES / 30.0  # the same patience in seconds: a slower camera must not wait longer for it
+MIN_PATIENCE_FRAMES = 2
+FPS_SMOOTHING = 0.2  # how quickly the measured picture rate follows changes
 MAX_MATCH_DISTANCE_PX = 40  # how far a blob may move between frames and keep its id
 WINDOW_NAME = "Rover Vision Window"
 
@@ -170,6 +175,12 @@ class _TrackState:
     missing: int = 0
 
 
+def patience_frames(frames_per_second: float) -> int:
+    """How many pictures in a row a believed blob may be missing before it is forgotten, so that the wait is
+    about a third of a second whatever the camera's rate: 10 at 30 a second, but 2 at 5 a second."""
+    return max(MIN_PATIENCE_FRAMES, min(MAX_MISSING_FRAMES, round(PATIENCE_S * frames_per_second)))
+
+
 class Tracker:
     """Gives each blob a stable id and only reports it once it has been seen several frames
     in a row. A believed blob that vanishes for a few frames is still reported, so one bad
@@ -186,6 +197,10 @@ class Tracker:
         self._max_distance = max_distance
         self._states: dict[int, _TrackState] = {}
         self._next_id = 1
+
+    def set_patience(self, max_missing: int) -> None:
+        """Change how many pictures in a row a believed blob may be missing before it is forgotten."""
+        self._max_missing = max_missing
 
     def update(self, centres: Sequence[Point]) -> tuple[Track, ...]:
         pairs = sorted(
@@ -360,8 +375,21 @@ def draw_overlay(
     return out
 
 
-def open_source(source: str) -> cv2.VideoCapture:
-    """A webcam index such as "0", or a stream URL such as the rover camera's /stream."""
+def open_source(source: str, usb_opener=None):
+    """A webcam index such as "0", a stream URL such as the rover camera's /stream, or the rover's
+    camera over its USB cable, written "usb:COM9"."""
+    if source.lower().startswith("blender:"):
+        port_text = source[8:].strip()
+        if not port_text.isdigit() or not 0 < int(port_text) < 65536:
+            raise ValueError("blender: needs the twin's UDP port, for example blender:8766")
+        return BlenderCamera(int(port_text))
+    if source.lower().startswith("usb:"):
+        name = source[4:].strip()
+        if not name:
+            raise ValueError("usb: needs a port name, for example usb:COM9")
+        if usb_opener is None:
+            return open_serial_camera(name)
+        return open_serial_camera(name, opener=usb_opener)
     if source.isdigit():
         index = int(source)
         if sys.platform == "win32":
@@ -414,6 +442,8 @@ class Pipeline:
         self._using_markers = False
         self._last_signature: Optional[tuple] = None
         self._started_at: Optional[float] = None
+        self._last_picture_at: Optional[float] = None
+        self._fps: Optional[float] = None  # pictures per second, as measured from the clock readings
         self.extra_clearance_mm = 0.0  # room learned from past runs, added to each side of the buggy
 
     @property
@@ -433,6 +463,16 @@ class Pipeline:
         ]
         return blocks_from_markers(in_mm, self._config.rules, self._config.block_mm)
 
+    def _tune_patience(self, now: float) -> None:
+        """Measure how fast pictures arrive and let the trackers wait about the same time, not the same count."""
+        if self._last_picture_at is not None and now > self._last_picture_at:
+            rate = 1.0 / (now - self._last_picture_at)
+            self._fps = rate if self._fps is None else self._fps + FPS_SMOOTHING * (rate - self._fps)
+            patience = patience_frames(self._fps)
+            self._block_tracker.set_patience(patience)
+            self._heat_tracker.set_patience(patience)
+        self._last_picture_at = now
+
     def process(
         self, frame: np.ndarray, now: float, survivor_hint: Optional[Point] = None
     ) -> FrameResult:
@@ -441,6 +481,7 @@ class Pipeline:
         if self._started_at is None:
             self._started_at = now
         warming_up = now - self._started_at < WARMUP_SECONDS
+        self._tune_patience(now)
 
         blurred = cv2.GaussianBlur(frame, (5, 5), 0)
         hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
@@ -479,11 +520,12 @@ class Pipeline:
         if self._using_markers:
             scene = scene_from_blocks(
                 self._blocks_from_markers(markers, origin, px_per_mm),
-                heat_tracks, survivor, origin, px_per_mm, projection=self._calibration,
+                heat_tracks, survivor, origin, px_per_mm, self._config.heat_radius_mm, projection=self._calibration,
             )
         else:
             scene = build_scene(
-                block_tracks, heat_tracks, survivor, origin, px_per_mm, projection=self._calibration
+                block_tracks, heat_tracks, survivor, origin, px_per_mm, self._config.heat_radius_mm,
+                projection=self._calibration,
             )
         result = decide(scene, corridor_mm=self._config.corridor_mm + 2 * self.extra_clearance_mm)
 

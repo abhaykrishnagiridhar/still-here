@@ -4,7 +4,7 @@
 // server.py; this page only asks and shows. Text is always set with textContent.
 import { call } from "./api.js";
                                                        
-import { BUSY_PHASES, END_PHASES, headlineFor, roverNotice, toDisplay, toFrame, toneFor, withNotice } from "./ui_logic.js";
+import { BUSY_PHASES, END_PHASES, episodeLine, headlineFor, roverNotice, toDisplay, toFrame, toneFor, withNotice } from "./ui_logic.js";
 
 const $ =                        (id        )    => {
   const element = document.getElementById(id);
@@ -27,6 +27,9 @@ const bar = $             ("progress-bar");
 const progressText = $             ("progress-text");
 const report = $             ("report");
 const reportText = $             ("report-text");
+const runs = $             ("runs");
+const runsNote = $             ("runs-note");
+const runsList = $             ("runs-list");
 
 let current               = null;
 let reportShown = false;
@@ -57,6 +60,18 @@ function fill   (list             , rows     , emptyText        , build         
     return;
   }
   rows.forEach((item) => list.append(build(item)));
+}
+
+// Autonomous mode (server started with --auto): one line per finished run, so the improvement can be read.
+function showRuns(state       )       {
+  const auto = state.autopilot;
+  runs.hidden = auto === null;
+  if (auto === null) return;
+  runsNote.textContent = auto.message;
+  fill(runsList, auto.history, "No run has finished yet.", (episode) => {
+    const line = episodeLine(episode);
+    return row(line.left, line.right, line.tone === "ok" ? "good" : "why");
+  });
 }
 
 function drawMark(state       )       {
@@ -96,6 +111,7 @@ function render(state       )       {
   bar.style.width = total ? `${Math.round((100 * done) / total)}%` : "0";
   progressText.textContent = total ? `${done} of ${total} steps done` : "";
 
+  showRuns(state);
   drawMark(state);
   if (finished && !reportShown) void loadReport();
   if (!finished) {
@@ -104,14 +120,21 @@ function render(state       )       {
   }
 }
 
+let refreshing = false;
+
 async function refresh()                {
+  if (refreshing) return; // a slow answer must not pile up more requests behind it
+  refreshing = true;
   try {
     render(await call       ("/api/state", "GET"));
   } catch (error) {
-    const refused = error instanceof Error && error.message.includes("access link");
-    setStatus(refused ? error.message : "Not connected. Start the server with: python server.py", "warn");
+    // A TypeError means the request never reached the server. Anything else is the server's own answer.
+    const unreachable = !(error instanceof Error) || error instanceof TypeError;
+    setStatus(unreachable ? "Not connected. Start the server with: python server.py" : (error         ).message, "warn");
     approve.disabled = true;
     stop.disabled = true;
+  } finally {
+    refreshing = false;
   }
 }
 

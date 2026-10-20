@@ -1,10 +1,24 @@
-// The control page: drive the rover and move its arm by hand. Hold a button (or W A S D, or the
-// arrow keys) to drive. The page keeps sending the drive command while the button is held, and the
-// server stops the wheels by itself if the commands stop. All work is done by server.py.
-import { call } from "./api.js";
-import type { Ack, State } from "./api.js";
-import { BUSY_PHASES, clamp, driveFor, keyDirection, roverNotice } from "./ui_logic.js";
-import type { Direction } from "./ui_logic.js";
+// The Manual tab: drive the rover and move its 5-servo arm by hand.
+//
+// This page talks straight to the arm board (firmware/rover_arm_ap.cpp) and shows the camera board's
+// video (firmware/mjpeg_server.cpp). Both boards and this computer must be on the same phone hotspot;
+// the boards announce still-arm.local and still-here.local. Hold a button (or
+// W A S D, or the arrow keys) to drive. The page repeats the drive command while the button is held,
+// and the rover stops its wheels by itself if the commands stop.
+import {
+  DEFAULT_CAMERA_ADDRESS,
+  DEFAULT_ROVER_ADDRESS,
+  streamUrl,
+  SERVO_COUNT,
+  cleanAddress,
+  clamp,
+  driveCode,
+  driveSpeedValue,
+  keyDirection,
+  parseArmState,
+  roverUrl,
+} from "./ui_logic.js";
+import type { ArmState, DriveDirection, RoverParams } from "./ui_logic.js";
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const element = document.getElementById(id);
@@ -12,84 +26,168 @@ const $ = <T extends HTMLElement>(id: string): T => {
   return element as T;
 };
 
-const SEND_EVERY_MS = 100; // how often a held button repeats its command
+const SEND_EVERY_MS = 100; // how often a held button repeats its command (the rover waits 400 ms)
 const POLL_EVERY_MS = 1000;
-const ARM_SPEED = 0.6;
-const HOME = { base: 0, shoulder: 60, elbow: -90, gripper: 90 };
+const ARM_SEND_GAP_MS = 60; // the arm slider sends at most this often while it is being dragged
+const REQUEST_TIMEOUT_MS = 2500;
+const TEST_WAIT_MS = 15000; // the rover answers "Test arm" at once, then is busy moving every joint
+const SYNC_AFTER_TOUCH_MS = 1500; // leave a slider alone this long after the person last moved it
+const ADDRESS_KEY = "still-here.rover-address";
+const CAMERA_KEY = "still-here.camera-address";
+const GRIPPER = 4; // index of the gripper among the five joints
+const SLIDER_JOINTS = 4; // base, shoulder, elbow, wrist have sliders; the gripper has a button
 
 const statusLine = $<HTMLElement>("status");
+const addressInput = $<HTMLInputElement>("rover-address");
+const cameraInput = $<HTMLInputElement>("camera-address");
+const video = $<HTMLImageElement>("video");
+const videoNote = $<HTMLElement>("video-note");
+const connectButton = $<HTMLButtonElement>("connect");
 const speedInput = $<HTMLInputElement>("speed");
 const speedOut = $<HTMLOutputElement>("speed-out");
 const stopButton = $<HTMLButtonElement>("stop-now");
+const padStop = $<HTMLButtonElement>("pad-stop");
 const gripButton = $<HTMLButtonElement>("grip");
 const homeButton = $<HTMLButtonElement>("arm-home");
-const sliders = {
-  base: $<HTMLInputElement>("base"),
-  shoulder: $<HTMLInputElement>("shoulder"),
-  elbow: $<HTMLInputElement>("elbow"),
-};
+const testButton = $<HTMLButtonElement>("arm-test");
+const armSpeedInput = $<HTMLInputElement>("arm-speed");
+const armSpeedOut = $<HTMLOutputElement>("arm-speed-out");
+const sliders = [
+  $<HTMLInputElement>("base"),
+  $<HTMLInputElement>("shoulder"),
+  $<HTMLInputElement>("elbow"),
+  $<HTMLInputElement>("wrist"),
+];
+const sliderOuts = [
+  $<HTMLOutputElement>("base-out"),
+  $<HTMLOutputElement>("shoulder-out"),
+  $<HTMLOutputElement>("elbow-out"),
+  $<HTMLOutputElement>("wrist-out"),
+];
 const padButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-dir]"));
 
+let address = DEFAULT_ROVER_ADDRESS;
+let connected = false;
 let gripperOpen = true;
-let held: Direction | null = null;
-let timer: number | undefined;
-let planRunning = false;
+let gripRange = { min: 30, max: 110 };
+let held: DriveDirection | null = null;
+let driveTimer: number | undefined;
+const lastSent = new Array<number>(SERVO_COUNT).fill(0);
+const lastTouched = new Array<number>(SERVO_COUNT).fill(0);
+let testing = false;
 
 function say(text: string, warn = false): void {
   statusLine.textContent = text;
   statusLine.dataset.tone = warn ? "warn" : "";
 }
 
-async function send(path: string, body?: unknown): Promise<void> {
+function remember(key: string, value: string): void {
   try {
-    await call<Ack>(path, "POST", body);
-  } catch (error) {
-    say(error instanceof Error ? error.message : "Something went wrong.", true);
-    release();
+    window.localStorage.setItem(key, value);
+  } catch {
+    // private browsing: the address just is not remembered
   }
 }
 
-function speed(): number {
-  return clamp(Number(speedInput.value) / 100, 0, 1);
+function recall(key: string, fallback: string): string {
+  try {
+    return cleanAddress(window.localStorage.getItem(key) ?? "") ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+// Start (or restart) the live picture from the camera board. It is a separate board from the arm,
+// so the picture failing never stops the driving.
+function showVideo(cameraAddress: string): void {
+  videoNote.textContent = `Looking for the camera at ${cameraAddress}...`;
+  video.hidden = true;
+  video.onload = () => {
+    video.hidden = false;
+    videoNote.textContent = `Live from ${cameraAddress}.`;
+  };
+  video.onerror = () => {
+    video.hidden = true;
+    videoNote.textContent = `No video from ${cameraAddress}. Is the camera board on the same hotspot? You can still drive.`;
+  };
+  video.src = streamUrl(cameraAddress);
+}
+
+// One request to the rover. Throws if it cannot be reached, is too slow or answers with an error.
+async function ask(path: string, params: RoverParams = {}, timeoutMs = REQUEST_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(roverUrl(address, path, params), { signal: controller.signal, cache: "no-store" });
+    if (!response.ok) throw new Error(`The rover answered ${response.status}.`);
+    return response;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+function lostTheRover(): void {
+  release(false);
+  setConnected(false);
+  say(`Cannot reach the rover at ${address}. Is this computer on the same hotspot as the rover? Then press Connect.`, true);
+}
+
+async function send(path: string, params: RoverParams = {}, timeoutMs = REQUEST_TIMEOUT_MS): Promise<void> {
+  try {
+    await ask(path, params, timeoutMs);
+  } catch {
+    lostTheRover();
+  }
+}
+
+function setConnected(value: boolean): void {
+  connected = value;
+  [...padButtons, padStop, gripButton, homeButton, testButton, speedInput, armSpeedInput, ...sliders].forEach(
+    (control) => {
+      control.disabled = !value;
+    },
+  );
+}
+
+// --- driving ---------------------------------------------------------------------------------
+
+function speedValue(): number {
+  return driveSpeedValue(Number(speedInput.value));
 }
 
 function driveNow(): void {
-  if (held !== null) void send("/api/manual/drive", driveFor(held, speed()));
+  if (held !== null) void send("/drive", { d: driveCode(held), v: speedValue() });
 }
 
-function press(direction: Direction): void {
-  if (planRunning || held === direction) return;
+function press(direction: DriveDirection): void {
+  if (!connected || held === direction) return;
   release(false);
   held = direction;
   padButtons.forEach((b) => b.classList.toggle("held", b.dataset.dir === direction));
   driveNow();
-  timer = window.setInterval(driveNow, SEND_EVERY_MS);
+  driveTimer = window.setInterval(driveNow, SEND_EVERY_MS);
 }
 
 function release(tellRover = true): void {
-  if (timer !== undefined) window.clearInterval(timer);
-  timer = undefined;
+  if (driveTimer !== undefined) window.clearInterval(driveTimer);
+  driveTimer = undefined;
   const wasHeld = held !== null;
   held = null;
   padButtons.forEach((b) => b.classList.remove("held"));
-  if (tellRover && wasHeld) void send("/api/manual/stop");
+  if (tellRover && wasHeld) void send("/drive", { d: "S" });
 }
 
-function sendArm(): void {
-  if (planRunning) return;
-  void send("/api/manual/arm", {
-    base: Number(sliders.base.value),
-    shoulder: Number(sliders.shoulder.value),
-    elbow: Number(sliders.elbow.value),
-    gripper: gripperOpen ? 90 : 0,
-    speed: ARM_SPEED,
-  });
+function stopAll(): void {
+  release(false);
+  void send("/stop");
 }
 
-let armTimer: number | undefined;
-function sendArmSoon(): void {
-  window.clearTimeout(armTimer);
-  armTimer = window.setTimeout(sendArm, SEND_EVERY_MS);
+// --- arm -------------------------------------------------------------------------------------
+
+function showSlider(index: number): void {
+  const slider = sliders[index];
+  const out = sliderOuts[index];
+  if (slider && out) out.textContent = `${slider.value}°`;
 }
 
 function showGrip(): void {
@@ -97,35 +195,106 @@ function showGrip(): void {
   gripButton.setAttribute("aria-pressed", String(!gripperOpen));
 }
 
-function setControlsEnabled(enabled: boolean): void {
-  [...padButtons, stopButton, gripButton, homeButton, speedInput, ...Object.values(sliders)].forEach((control) => {
-    if (control !== stopButton) control.disabled = !enabled;
-  });
+function sendJoint(index: number): void {
+  const slider = sliders[index];
+  if (!slider) return;
+  lastSent[index] = Date.now();
+  void send("/servo", { n: index + 1, a: slider.value });
 }
 
-async function poll(): Promise<void> {
-  try {
-    const state = await call<State>("/api/state", "GET");
-    planRunning = BUSY_PHASES.includes(state.phase);
-    const notice = roverNotice(state.rover_connected, state.rover_address, state.rover_error);
-    setControlsEnabled(!planRunning && notice === null);
-    if (notice !== null) {
-      release(false);
-      say(notice, true);
-    } else if (planRunning) {
-      release(false);
-      say("An approved plan is running, so manual control is off. Stop it on the autonomous page.", true);
-    } else if (statusLine.dataset.tone === "warn" && /plan is running|Not connected to the rover/.test(statusLine.textContent ?? "")) {
-      say("Ready. Hold a button or W A S D to drive.");
+// Drag: send straight away, then at most every ARM_SEND_GAP_MS. The last value always goes out
+// when the slider is let go (the change event).
+function onSliderInput(index: number): void {
+  lastTouched[index] = Date.now();
+  showSlider(index);
+  if (Date.now() - (lastSent[index] ?? 0) >= ARM_SEND_GAP_MS) sendJoint(index);
+}
+
+function setGripper(open: boolean): void {
+  gripperOpen = open;
+  lastTouched[GRIPPER] = Date.now();
+  showGrip();
+  void send("/servo", { n: GRIPPER + 1, a: open ? gripRange.max : gripRange.min });
+}
+
+// Follow what the rover reports. A slider the person is using is left alone.
+function showArm(state: ArmState, force: boolean): void {
+  const now = Date.now();
+  for (let i = 0; i < SLIDER_JOINTS; i++) {
+    const slider = sliders[i];
+    const [lo, hi, at] = [state.min[i], state.max[i], state.a[i]];
+    if (!slider || lo === undefined || hi === undefined || at === undefined) continue;
+    slider.min = String(lo);
+    slider.max = String(hi);
+    if (force || now - (lastTouched[i] ?? 0) > SYNC_AFTER_TOUCH_MS) {
+      slider.value = String(clamp(at, lo, hi));
+      showSlider(i);
     }
-  } catch (error) {
-    const refused = error instanceof Error && error.message.includes("access link");
-    say(refused ? error.message : "Not connected. Start the server with: python server.py", true);
+  }
+  const [gripMin, gripMax, gripAt] = [state.min[GRIPPER], state.max[GRIPPER], state.a[GRIPPER]];
+  if (gripMin === undefined || gripMax === undefined || gripAt === undefined) return;
+  gripRange = { min: gripMin, max: gripMax };
+  if (force || now - (lastTouched[GRIPPER] ?? 0) > SYNC_AFTER_TOUCH_MS) {
+    gripperOpen = gripAt > (gripMin + gripMax) / 2;
+    showGrip();
   }
 }
 
+async function readState(): Promise<ArmState | null> {
+  const response = await ask("/state");
+  return parseArmState(await response.json());
+}
+
+// --- connecting ------------------------------------------------------------------------------
+
+async function connect(): Promise<void> {
+  const cleaned = cleanAddress(addressInput.value);
+  if (cleaned === null) {
+    say("That is not a rover address. Use something like 192.168.4.1.", true);
+    return;
+  }
+  address = cleaned;
+  addressInput.value = cleaned;
+  remember(ADDRESS_KEY, cleaned);
+  const camera = cleanAddress(cameraInput.value);
+  if (camera === null) {
+    videoNote.textContent = "That is not a camera address. Use something like still-here.local.";
+  } else {
+    cameraInput.value = camera;
+    remember(CAMERA_KEY, camera);
+    showVideo(camera);
+  }
+  say(`Connecting to the rover at ${cleaned}...`);
+  try {
+    const state = await readState();
+    if (state === null) {
+      setConnected(false);
+      say(`Something answered at ${cleaned}, but it is not the rover's arm firmware.`, true);
+      return;
+    }
+    showArm(state, true);
+    setConnected(true);
+    say(`Connected to the rover at ${cleaned}. Hold a button or W A S D to drive. Space stops.`);
+  } catch {
+    lostTheRover();
+  }
+}
+
+async function poll(): Promise<void> {
+  if (testing || !connected) return;
+  try {
+    const state = await readState();
+    if (state === null) throw new Error("Not the rover.");
+    showArm(state, false);
+  } catch {
+    lostTheRover();
+  }
+}
+
+// --- events ----------------------------------------------------------------------------------
+
 padButtons.forEach((button) => {
-  const direction = button.dataset.dir as Direction;
+  const direction = button.dataset.dir as DriveDirection;
   button.addEventListener("pointerdown", (event: PointerEvent) => {
     button.setPointerCapture(event.pointerId);
     press(direction);
@@ -140,8 +309,7 @@ window.addEventListener("keydown", (event: KeyboardEvent) => {
   if (event.repeat || event.target instanceof HTMLInputElement) return;
   if (event.key === " ") {
     event.preventDefault();
-    release();
-    void send("/api/manual/stop");
+    stopAll();
     return;
   }
   const direction = keyDirection(event.key);
@@ -162,27 +330,56 @@ document.addEventListener("visibilitychange", () => {
 speedInput.addEventListener("input", () => {
   speedOut.textContent = `${speedInput.value}%`;
 });
-stopButton.addEventListener("click", () => {
-  release(false);
-  void send("/api/manual/stop");
+armSpeedInput.addEventListener("input", () => {
+  armSpeedOut.textContent = armSpeedInput.value;
+  void send("/armspeed", { v: armSpeedInput.value });
 });
-Object.values(sliders).forEach((slider) => slider.addEventListener("input", sendArmSoon));
-gripButton.addEventListener("click", () => {
-  gripperOpen = !gripperOpen;
-  showGrip();
-  sendArm();
+sliders.forEach((slider, index) => {
+  slider.addEventListener("input", () => onSliderInput(index));
+  slider.addEventListener("change", () => sendJoint(index));
 });
-homeButton.addEventListener("click", () => {
-  sliders.base.value = String(HOME.base);
-  sliders.shoulder.value = String(HOME.shoulder);
-  sliders.elbow.value = String(HOME.elbow);
-  gripperOpen = true;
-  showGrip();
-  sendArm();
+stopButton.addEventListener("click", stopAll);
+padStop.addEventListener("click", stopAll);
+gripButton.addEventListener("click", () => setGripper(!gripperOpen));
+homeButton.addEventListener("click", async () => {
+  await send("/home");
+  try {
+    const state = await readState();
+    if (state !== null) showArm(state, true);
+  } catch {
+    lostTheRover();
+  }
 });
+testButton.addEventListener("click", async () => {
+  testing = true;
+  setConnected(false);
+  say("Testing the arm: each joint moves a little and back. Wait for it to finish.");
+  try {
+    await ask("/test");
+  } catch {
+    lostTheRover();
+    testing = false;
+    return;
+  }
+  await new Promise((resolve) => window.setTimeout(resolve, TEST_WAIT_MS));
+  testing = false;
+  await connect();
+});
+connectButton.addEventListener("click", () => void connect());
+for (const input of [addressInput, cameraInput]) {
+  input.addEventListener("keydown", (event: KeyboardEvent) => {
+    if (event.key === "Enter") void connect();
+  });
+}
 
-showGrip();
+address = recall(ADDRESS_KEY, DEFAULT_ROVER_ADDRESS);
+addressInput.value = address;
+cameraInput.value = recall(CAMERA_KEY, DEFAULT_CAMERA_ADDRESS);
 speedOut.textContent = `${speedInput.value}%`;
-say("Ready. Hold a button or W A S D to drive. Space stops.");
-void poll();
+armSpeedOut.textContent = armSpeedInput.value;
+sliders.forEach((_, index) => showSlider(index));
+showGrip();
+setConnected(false);
+say("Put this computer on the same hotspot as the rover, then press Connect.");
+void connect();
 setInterval(() => void poll(), POLL_EVERY_MS);

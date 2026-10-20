@@ -7,8 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@200;400;600&display=swap">
-  <link rel="stylesheet" href="landing.css?v=4">
-  <link rel="stylesheet" href="operator.css?v=2">
+  <link rel="stylesheet" href="landing.css?v=5">
+  <link rel="stylesheet" href="operator.css?v=3">
 </head>
 <body>
   <header class="topbar">
@@ -21,42 +21,63 @@
   <main class="operator">
     <p class="label">Manual mode</p>
     <h1>Drive it yourself.</h1>
-    <p class="status" id="status" role="status" aria-live="polite">Connecting to the server...</p>
+    <p class="status" id="status" role="status" aria-live="polite">Put this computer on the same hotspot as the rover, then press Connect.</p>
+
+    <form class="link-row" id="link-form" onsubmit="return false">
+      <label class="slider" for="rover-address">Arm and wheels address</label>
+      <input id="rover-address" type="text" inputmode="url" autocomplete="off" spellcheck="false" value="still-arm.local">
+      <label class="slider" for="camera-address">Camera address</label>
+      <div class="link-fields">
+        <input id="camera-address" type="text" inputmode="url" autocomplete="off" spellcheck="false" value="still-here.local">
+        <button class="button ghost" id="connect" type="button">Connect</button>
+      </div>
+    </form>
 
     <div class="workspace">
-      <figure class="camera">
-        <img id="video" src="/video" alt="Live camera view from the rover" width="640" height="480">
-        <figcaption>Hold a button, or W A S D or the arrow keys, to drive. Space stops. The rover stops by itself if you let go.</figcaption>
-      </figure>
-
       <div class="panel">
+        <figure class="camera">
+          <img id="video" alt="Live camera view from the rover" width="640" height="480" hidden>
+          <figcaption id="video-note">No video yet. Press Connect once the camera board is on the hotspot.</figcaption>
+        </figure>
         <section aria-labelledby="drive-heading">
           <h2 id="drive-heading">Drive</h2>
+          <p class="hint">Hold a button, or W A S D or the arrow keys. Space stops. The rover stops by itself if you let go.</p>
           <div class="pad" role="group" aria-label="Drive buttons">
-            <button class="pad-key up" type="button" data-dir="forward" aria-label="Forward">Forward</button>
-            <button class="pad-key left" type="button" data-dir="left" aria-label="Turn left">Left</button>
-            <button class="pad-key right" type="button" data-dir="right" aria-label="Turn right">Right</button>
-            <button class="pad-key down" type="button" data-dir="back" aria-label="Reverse">Back</button>
+            <button class="pad-key ul" type="button" data-dir="forward-left" aria-label="Forward and left" disabled>Fwd L</button>
+            <button class="pad-key up" type="button" data-dir="forward" aria-label="Forward" disabled>Forward</button>
+            <button class="pad-key ur" type="button" data-dir="forward-right" aria-label="Forward and right" disabled>Fwd R</button>
+            <button class="pad-key left" type="button" data-dir="left" aria-label="Turn left" disabled>Left</button>
+            <button class="pad-key stop" id="pad-stop" type="button" aria-label="Stop" disabled>Stop</button>
+            <button class="pad-key right" type="button" data-dir="right" aria-label="Turn right" disabled>Right</button>
+            <button class="pad-key dl" type="button" data-dir="back-left" aria-label="Reverse and left" disabled>Back L</button>
+            <button class="pad-key down" type="button" data-dir="back" aria-label="Reverse" disabled>Back</button>
+            <button class="pad-key dr" type="button" data-dir="back-right" aria-label="Reverse and right" disabled>Back R</button>
           </div>
           <label class="slider" for="speed">Speed <output id="speed-out" for="speed">30%</output></label>
-          <input id="speed" type="range" min="10" max="100" step="5" value="30">
-          <button class="button stop wide" id="stop-now" type="button">Stop the rover</button>
+          <input id="speed" type="range" min="10" max="100" step="5" value="30" disabled>
         </section>
+      </div>
 
+      <div class="panel">
         <section aria-labelledby="arm-heading">
           <h2 id="arm-heading">Arm</h2>
-          <label class="slider" for="base">Base swing</label>
-          <input id="base" type="range" min="-90" max="90" step="1" value="0">
-          <label class="slider" for="shoulder">Shoulder</label>
-          <input id="shoulder" type="range" min="0" max="120" step="1" value="60">
-          <label class="slider" for="elbow">Elbow</label>
-          <input id="elbow" type="range" min="-135" max="135" step="1" value="-90">
+          <label class="slider" for="base">Base swing <output id="base-out" for="base">90&deg;</output></label>
+          <input id="base" type="range" min="0" max="180" step="1" value="90" disabled>
+          <label class="slider" for="shoulder">Shoulder <output id="shoulder-out" for="shoulder">90&deg;</output></label>
+          <input id="shoulder" type="range" min="30" max="150" step="1" value="90" disabled>
+          <label class="slider" for="elbow">Elbow <output id="elbow-out" for="elbow">90&deg;</output></label>
+          <input id="elbow" type="range" min="20" max="160" step="1" value="90" disabled>
+          <label class="slider" for="wrist">Wrist <output id="wrist-out" for="wrist">90&deg;</output></label>
+          <input id="wrist" type="range" min="20" max="160" step="1" value="90" disabled>
+          <label class="slider" for="arm-speed">Arm speed <output id="arm-speed-out" for="arm-speed">3</output></label>
+          <input id="arm-speed" type="range" min="1" max="8" step="1" value="3" disabled>
           <div class="actions">
-            <button class="button ghost" id="grip" type="button" aria-pressed="false">Gripper: open</button>
-            <button class="button ghost" id="arm-home" type="button">Arm to home</button>
+            <button class="button ghost" id="grip" type="button" aria-pressed="false" disabled>Gripper: open</button>
+            <button class="button ghost" id="arm-home" type="button" disabled>Arm to home</button>
+            <button class="button ghost" id="arm-test" type="button" disabled>Test arm</button>
           </div>
         </section>
-
+        <button class="button stop wide" id="stop-now" type="button">Stop everything</button>
         <p><a class="button ghost" href="autonomous.html">Autonomous mode</a></p>
       </div>
     </div>
@@ -71,6 +92,6 @@
     </nav>
   </footer>
 
-  <script type="module" src="control.js?v=1"></script>
+  <script type="module" src="control.js?v=2"></script>
 </body>
 </html>

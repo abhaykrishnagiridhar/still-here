@@ -7,8 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@200;400;600&display=swap">
-  <link rel="stylesheet" href="landing.css?v=4">
-  <link rel="stylesheet" href="operator.css?v=2">
+  <link rel="stylesheet" href="landing.css?v=5">
+  <link rel="stylesheet" href="operator.css?v=3">
 </head>
 <body>
   <header class="topbar">
@@ -38,6 +38,12 @@
           <button class="button ghost" id="clear-tap" type="button" hidden>Clear survivor spot</button>
           <button class="button ghost" id="again" type="button" hidden>Start a new run</button>
         </div>
+
+        <section class="runs" id="runs" aria-labelledby="runs-heading" hidden>
+          <h2 id="runs-heading">Learning across runs</h2>
+          <p class="runs-note" id="runs-note"></p>
+          <ol class="steps" id="runs-list"></ol>
+        </section>
 
         <section aria-labelledby="remove-heading">
           <h2 id="remove-heading">Blocks to remove, in order</h2>
@@ -71,6 +77,6 @@
     </nav>
   </footer>
 
-  <script type="module" src="operator.js?v=2"></script>
+  <script type="module" src="operator.js?v=3"></script>
 </body>
 </html>

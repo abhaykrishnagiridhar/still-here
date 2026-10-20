@@ -96,7 +96,11 @@ still-here/
   planner.hpp, perception.hpp  OpenCV-free logic for vision.cpp
   test_planner.cpp, test_perception.cpp  Tests for those headers
   CMakeLists.txt             Builds vision.cpp and the two test programs
-  simulation/                Phone tilt to Blender digital twin
+  run_rover.bat              Windows shortcut that starts the operator server
+  simulation/                Phone tilt to Blender digital twin, and the recorded autonomy demo
+    record_demo.py           Plays the human in the Blender demo and records the video
+    survivor_check.py        Asks Blender for a picture and finds the survivor with the person detector
+    test_record_demo.py, test_survivor_check.py  Tests for those two
     phone_bridge.py          Serves the phone page over http and forwards tilt to Blender
     phone_control.html       Phone controller page
     blender_rover.py         Blender scene driven by sim_rover.py
@@ -110,6 +114,12 @@ still-here/
     roadmap.md              Where the project could go: fire and rescue, stronger servos, partners
     phone-simulation.md     How the phone and Blender simulation works, for people and LLMs
     trials.csv               Log of the 10 two-block test runs
+    mission-9-compliance.md  The challenge brief, line by line: what meets it, proof, and the gaps that remain
+    production-readiness.md  What was hardened, and what must be decided before real use (security, hardware, licence)
+    autonomy-demo.md         The whole loop in the Blender twin, and how to record it
+    demo-runbook.md          Demo with a real webcam and the software rover
+    survivor-detection.md    Finding a person with a pretrained detector (YOLOX-S through OpenCV)
+    demo-assumptions.md, bench-and-integration-checklist.md, firmware-handoff.md  Hardware assumptions, bring-up order, hand-over notes
   laptop/
     models.py                Frozen data types: Block, HeatZone, PlanStep, Plan
     test_models.py           Tests for the data types
@@ -146,6 +156,17 @@ still-here/
     test_rover_link.py, test_sim_server.py  Tests for the link and the software rover server
     manual_core.py           Manual drive and arm commands, with a stop if the page goes quiet
     marker_sheet.py          Makes a printable sheet of ArUco block markers
+    blender_link.py, blender_camera.py  The Blender twin as the rover and as the camera, over UDP
+    demo_world.py            The demo scene (four blocks, a fire pad, the survivor) shared by Blender and the tests
+    person_detector.py       Pretrained YOLOX-S person finder (model file not in git, see docs/survivor-detection.md)
+    snapshot_client.py, snapshot_protocol.py  Ask Blender for one picture over UDP
+    autopilot.py             Autonomous mode for the Blender demo: approves its own plans, resets the course, shows what each run taught it
+    test_autopilot.py, test_learning_loop.py, test_sim_learning.py  Tests for it, for the whole learn-from-a-bump loop, and for the simulated rover's hidden width
+    serial_camera.py         The rover's camera over its USB cable ("usb:COM9")
+    experience.py            Learns extra corridor clearance from past runs
+    grip_watch.py            Checks with the camera that a picked block really left its place
+    test_packaging.py        Every laptop module must be listed in pyproject.toml
+    test_operator_hardening.py  The operator with a dead link and malformed rover messages
     api.ts, ui_logic.ts      Page code shared by both pages: server calls and the plain decisions
     operator.ts, control.ts  The autonomous page and the manual control page, in TypeScript
     *.js built from the .ts  What the browser loads, made by build.mjs. Edit the .ts, then run node build.mjs
@@ -188,13 +209,11 @@ still-here/
     rover_control.py         Console for driving the rover by hand with the protocol messages, through the same link as the server
     camera.h, camera.cpp     GC2145 camera: raw pictures turned into JPEG on the chip
     mjpeg_server.h, .cpp     Video over Wi-Fi: /stream (MJPEG), /capture (one picture)
-    link.cpp *               WebSocket server, link-loss handling
-    arm.cpp *                PCA9685 servo driver, pick and drop, stored plan
-    drive.cpp *              L298N wheels, manual and auto modes, IR stop
-    sensors.cpp *            IR obstacle, IR flame and DHT11 readout
+    rover_arm_ap.cpp         The Manual tab's firmware for the classic ESP32 arm board (5 servos), built with `-e rover_arm`
+    diag_main.cpp            Boot report only, to find out why the real firmware does not start (`-e diag`)
 ```
 
-`*` = planned, not written yet.
+Note: the two firmwares drive different arms (4 servos on the ESP32-S3 in `main.cpp`, 5 on the classic ESP32 in `rover_arm_ap.cpp`). Settle which one is the final robot, see [docs/production-readiness.md](docs/production-readiness.md).
 
 ## The one thing to do first
 
@@ -205,6 +224,11 @@ Pass rule: the bottom block moves less than 5 mm and rotates less than 10 degree
 For the current time-boxed demo, this is a deferred validation gate rather than a completed
 claim. The explicit approximate hardware profile and live-demo limits are in
 [docs/demo-assumptions.md](docs/demo-assumptions.md).
+
+## Meeting the brief, and using it for real
+
+- [docs/mission-9-compliance.md](docs/mission-9-compliance.md) checks the project against the Innovation Mission 9 brief and lists the gaps that remain.
+- [docs/production-readiness.md](docs/production-readiness.md) lists what was hardened and what must be decided before real use.
 
 ## Real-board integration
 
@@ -248,7 +272,7 @@ Run the operator pages (camera, plan, approve, report) and the manual control pa
 python server.py              # the real rover (still-here.local) and its video; --simulate for no hardware
 ```
 
-Then open http://127.0.0.1:8000/ for autonomous mode and http://127.0.0.1:8000/control.html for manual control. While the rover works, the server keeps watching the camera. If a block it has not touched moves, vanishes, or a new one appears, it stops the rover, writes the run up as a safe stop, and offers a fresh plan from the new picture. The rover never carries on with a plan nobody has looked at: you approve the new one. The server finds the rover by its name, `still-here.local` (set in `config.toml`, or pass `--rover <name or address>`), and the rover firmware is expected to announce that name on the network. If the rover cannot be reached the pages say so and send nothing. To use the pages from a phone or another laptop on the same Wi-Fi, start it with `python server.py --host 0.0.0.0`. It prints an **access link** with a token in it (and your laptop's Wi-Fi address). Open that link once on the other device: it signs you in and then shows a clean address. This laptop never needs the token, but any other device, and any program other than a browser, is refused without it. The token changes each start (or give one with `--token`). The link is plain http, so use a network you trust, such as your own phone hotspot. With no hardware, use `python server.py clip.avi --simulate`, or run `python sim_server.py` in another window (the software rover as a WebSocket server) and start the server with `--rover 127.0.0.1` to try the whole real-rover path.
+Then open http://127.0.0.1:8000/ for autonomous mode and http://127.0.0.1:8000/control.html for manual control. While the rover works, the server keeps watching the camera. If a block it has not touched moves, vanishes, or a new one appears, it stops the rover, writes the run up as a safe stop, and offers a fresh plan from the new picture. The rover never carries on with a plan nobody has looked at: you approve the new one. The server finds the rover by its name, `still-here.local` (set in `config.toml`, or pass `--rover <name or address>`), and the rover firmware is expected to announce that name on the network. If the rover cannot be reached the pages say so and send nothing. To use the pages from a phone or another laptop on the same Wi-Fi, start it with `python server.py --host 0.0.0.0`. It prints an **access link** with a token in it (and your laptop's Wi-Fi address). Open that link once on the other device: it signs you in and then shows a clean address. This laptop never needs the token, but any other device, and any program other than a browser, is refused without it. The token changes each start (or give one with `--token`). The link is plain http, so use a network you trust, such as your own phone hotspot. To watch the rover learn, run the Blender twin and then `python server.py --blender 8766 --auto --episodes 3` (see [docs/autonomy-demo.md](docs/autonomy-demo.md)): the first run brushes a block the planner thought was safe, the laptop widens the corridor, and the second run removes that block too. With no hardware, use `python server.py clip.avi --simulate`, or run `python sim_server.py` in another window (the software rover as a WebSocket server) and start the server with `--rover 127.0.0.1` to try the whole real-rover path.
 
 First-time setup, in this order:
 

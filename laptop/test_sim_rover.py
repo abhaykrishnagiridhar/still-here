@@ -435,3 +435,23 @@ def test_the_snapshot_describes_the_world_for_the_viewer():
     assert snap["heat"] == [{"x": 10, "y": 20, "r": 30}]
     assert snap["survivor"] == (400.0, 0.0)
     assert snap["link_up"] is True
+
+
+def test_plan_running_is_true_from_the_start_of_a_plan_until_it_finishes():
+    rover = SimRover([Block(1, 1, 150, 0, 1)])
+    assert rover.plan_running is False
+
+    start_plan(rover, [PICK, DROP])
+    assert rover.plan_running is True
+
+    run(rover, 20)
+    assert rover.plan_running is False
+
+
+def test_plan_running_is_false_again_after_an_abort():
+    rover = SimRover([Block(1, 1, 150, 0, 1)])
+    start_plan(rover, [PICK, DROP])
+
+    rover.handle({"type": "abort"})
+
+    assert rover.plan_running is False

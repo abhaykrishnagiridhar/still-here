@@ -22,6 +22,26 @@ export interface PlanView {
   path: [number, number][];
 }
 
+// One finished run of autonomous mode (autopilot.py).
+export interface EpisodeView {
+  number: number;
+  moved: number;
+  outcome: string; // "clean", "bumped" or "unverified"
+  brushed: string | null;
+  corridor_mm: number;
+  next_corridor_mm: number;
+}
+
+export interface AutopilotView {
+  active: boolean;
+  episode: number;
+  episodes: number;
+  message: string;
+  corridor_mm: number;
+  extra_mm: number;
+  history: EpisodeView[];
+}
+
 export interface State {
   phase: string;
   message: string;
@@ -38,6 +58,7 @@ export interface State {
   rover_connected: boolean;
   rover_address: string;
   rover_error: string;
+  autopilot: AutopilotView | null; // null unless the server was started with --auto
 }
 
 export interface ReportBody {

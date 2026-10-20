@@ -64,6 +64,7 @@ class Config:
     buggy_breadth_mm: float = 200.0  # the buggy's official width
     buggy_length_mm: float = 475.0  # official: between 450 and 500
     clearance_mm: float = 20.0  # spare room each side when driving between blocks
+    heat_radius_mm: float = 100.0  # how far from a fire a block or the buggy must stay (an assumption until measured)
 
     @property
     def corridor_mm(self) -> float:
@@ -127,7 +128,7 @@ def load_config(path: Optional[Path] = None) -> Config:
     defaults = Config()
     rover, blocks = data.get("rover", {}), data.get("blocks", {})
     light, test = data.get("survivor_light", {}), data.get("test", {})
-    buggy = data.get("buggy", {})
+    buggy, hazard = data.get("buggy", {}), data.get("hazard", {})
     try:
         config = Config(
             rover_host=_text(rover, "host", defaults.rover_host),
@@ -143,6 +144,7 @@ def load_config(path: Optional[Path] = None) -> Config:
             buggy_breadth_mm=_number(buggy, "breadth_mm", defaults.buggy_breadth_mm),
             buggy_length_mm=_number(buggy, "length_mm", defaults.buggy_length_mm),
             clearance_mm=_number(buggy, "clearance_mm", defaults.clearance_mm),
+            heat_radius_mm=_number(hazard, "heat_radius_mm", defaults.heat_radius_mm),
         )
     except ValueError as error:
         raise ValueError(f"{path.name}: {error}") from error

@@ -9,3 +9,7 @@
 // the laptop cannot see the rover at all: no ping, no still-here.local, no video.
 #define WIFI_SSID "your-hotspot-name"
 #define WIFI_PASSWORD "your-hotspot-password"
+
+// The arm board makes its own network (ROVER_ARM) when it cannot join the hotspot. Choose its password
+// here, at least 8 characters. Without this line it falls back to a public default (12345678).
+#define ARM_AP_PASSWORD "choose-a-password"

@@ -13,6 +13,7 @@ the caller is told.
 """
 
 import json
+import logging
 import threading
 import time
 from collections import deque
@@ -22,6 +23,8 @@ from websockets.exceptions import WebSocketException
 from websockets.sync.client import connect
 
 from plan_message import encode_message
+
+log = logging.getLogger("still_here.rover_link")
 
 PING_S = 0.5  # docs/protocol.md
 RETRY_S = 1.0  # wait before trying to reconnect
@@ -105,6 +108,9 @@ class RealLink:
                     self._serve(ws)
             except (OSError, TimeoutError, WebSocketException) as error:
                 self._last_error = f"{type(error).__name__}: {error}"
+            except Exception as error:  # anything else must not end the thread: keep trying to reconnect
+                self._last_error = f"{type(error).__name__}: {error}"
+                log.exception("rover link failed unexpectedly; reconnecting")
             finally:
                 self._connected.clear()
                 self._outbox.clear()
