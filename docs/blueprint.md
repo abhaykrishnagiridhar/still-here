@@ -108,108 +108,86 @@ flowchart LR
 
 ```
 still-here/
-  README.md                  What it is, the 8/10 gate, team rules, quick start
-  .gitignore                 Keeps firmware/secrets.h and laptop/config.toml out of git
-  .gitattributes             Unix line endings everywhere, so git stops printing line-ending warnings
-  pytest.ini                 Makes pytest from the repo root run only laptop/ and simulation/
-  vision.cpp                 C++ camera demo (scale, mm, fire); laptop/vision.py is the full version
-  planner.hpp, perception.hpp  OpenCV-free logic for vision.cpp
-  test_planner.cpp, test_perception.cpp  Tests for those headers
-  CMakeLists.txt             Builds vision.cpp and the two test programs
-  simulation/                Phone tilt to Blender digital twin
-    phone_bridge.py          Serves the phone page over http and forwards tilt to Blender
-    phone_control.html       Phone controller page
-    blender_rover.py         Blender scene driven by sim_rover.py
-    test_phone_bridge.py     Tests for the bridge
-  docs/
-    blueprint.md             This page: diagrams, build order, layout
-    protocol.md              Draft message contract between laptop and rover
-    tasks.md                 Per-person checklists for A, B, C, D
-    roadmap.md              Where the project could go: fire and rescue, stronger servos, partners
-    phone-simulation.md     How the phone and Blender simulation works, for people and LLMs
+  README.md                  What it is, how to run it, team rules
+  CMakeLists.txt             Builds the C++ prototype and the firmware's PC tests (run them with ctest)
+  pytest.ini                 Running pytest from here tests laptop/tests and simulation/ only
+  run_rover.bat              Windows shortcut that starts the operator server for the real rover
+  .gitignore, .gitattributes Keep secrets, caches and models out of git; Unix line endings everywhere
+
+  docs/                      Everything written down
+    blueprint.md             Diagrams, build order, this layout
+    protocol.md              The message contract between laptop and rover
+    tasks.md                 Per-person checklists and what is still open
+    mission-9-compliance.md  The challenge brief, line by line, with proof and remaining gaps
+    production-readiness.md  What was hardened, and what must be decided before real use
+    autonomy-demo.md         The autonomous, learning demo in the Blender twin
+    demo-runbook.md          Demo with a real webcam and the software rover
+    demo-assumptions.md      The approximate hardware profile the demo uses
+    survivor-detection.md    Finding a person with a pretrained detector
+    bench-and-integration-checklist.md  Safe, ordered bring-up of the real board
+    power.md, power-supply-improvements.md/.svg  The two-supply power design
+    phone-simulation.md      Phone tilt to Blender twin
+    roadmap.md               Where the project could go: fire and rescue
     trials.csv               Log of the 10 two-block test runs
-  laptop/
-    models.py                Frozen data types: Block, HeatZone, PlanStep, Plan
-    test_models.py           Tests for the data types
-    pyproject.toml           Python dependencies (OpenCV, FastAPI, pytest)
-    config.example.toml      Rover name, buggy size, block size, marker ids, pulse rate, pass thresholds
-    index.html, terms.html, privacy.html, blueprint.html  The project site
-    autonomous.html, control.html  The two operator pages (loaded with operator.js, control.js)
-    landing.css, landing.js, operator.css  Their style and the landing page script
-    planner.py               Top-first pick order, skip heavy blocks, avoid heat
-    test_planner.py          Tests for the planner
-    route.py                 Which blocks to remove to reach the survivor: cheapest route, heavy blocks and heat avoided
-    test_route.py            Tests for the route search
-    aruco.py                 ArUco markers on blocks: id, layer, weight; reads config.toml
-    scale.py                 Pixels to millimetres, learned from the 40 mm blocks
-    scene.py                 Turns picture positions into millimetres and picks plan or route
-    stream.py                Reopens the camera stream when it drops out
-    test_aruco.py            Tests for the markers and the config
-    test_scale.py            Tests for the scale
-    test_scene.py            Tests for the scene
-    test_stream.py           Tests for the stream
-    test_vision_pipeline.py  Whole camera pipeline on made-up pictures
-    gyro_map.py              Phone tilt to drive and arm messages
-    sim_rover.py             Software rover: same messages as the protocol, no hardware
-    test_gyro_map.py         Tests for the phone tilt mapping
-    test_sim_rover.py        Tests for the software rover
-    vision.py                Colour-blob vision demo (ported from the C++ prototype) feeding the planner
-    test_vision.py           Tests for the vision demo on synthetic pictures
-    server.py                Operator server: camera with the plan drawn on it, tap, approve, report
-    operator_core.py         What the operator sees and may approve; sends the plan to the rover
-    scene_watch.py           Compares each picture with the scene a plan was made for: a block moved, vanished or appeared
-    test_scene_watch.py, test_operator_replan.py  Tests for the scene check and for stopping and re-planning
-    rover_link.py            The server's WebSocket link to the rover: pings every 0.5 s, reconnects by itself
-    sim_server.py            The software rover as a WebSocket server, to test the real link with no hardware
-    test_rover_link.py, test_sim_server.py  Tests for the link and the software rover server
-    manual_core.py           Manual drive and arm commands, with a stop if the page goes quiet
-    marker_sheet.py          Makes a printable sheet of ArUco block markers
-    api.ts, ui_logic.ts      Page code shared by both pages: server calls and the plain decisions
-    operator.ts, control.ts  The autonomous page and the manual control page, in TypeScript
-    *.js built from the .ts  What the browser loads, made by build.mjs. Edit the .ts, then run node build.mjs
-    build.mjs, tsconfig.json, package.json  Build, type-check and test setup for the pages
-    ui_logic.test.ts         Tests for the page decisions, run with node --test
-    test_manual.py, test_marker_sheet.py, test_ui_build.py  Tests for manual control, markers and the page build
-    plan_message.py          Builds and checks the messages sent to the rover (whole-number plan ids)
-    report.py                Fact-first run report, with a summary only from an allowed list, and a chime
-    calibrate.py             Camera calibration: picture pixels to millimetres on the table (perspective fit)
-    calibration_points.example.json  An example points file for calibrate.py (replace with measured points)
-    trial_log.py             Logs the two-block stack test to docs/trials.csv and checks the 8 of 10 gate
-    scenario_runner.py       Replays a scenario of protocol messages on the software rover or a real one
-    scenario_pick_drop.json  The bundled pick and drop scenario
-    test_calibrate.py        Tests for the calibration
-    test_trial_log.py        Tests for the trial log
-    test_scenario_runner.py  Tests for the scenario runner
-    test_plan_message.py     Tests for the messages
-    test_report.py           Tests for the report
-    origin_guard.py          Only local pages may press the buttons
-    test_server.py           Tests for the server
-    test_operator.py         Tests for the operator logic
-    test_origin_guard.py     Tests for the origin rule
-    test_rover_control.py    Tests for the hand-driving console in firmware/
-  firmware/
-    main.cpp                 Joins Wi-Fi, starts the camera and the video server; the rover loop grows from here
-    pins.h                   Pin map for the ESP32-S3 board: camera confirmed, the rest untested
-    rover_types.h, rover_json.h  Pose type and the strict message reader (no library, no heap)
-    rover_arm.h              Arm lengths, limits and kinematics, the same maths as sim_rover.py
-    rover_origin.h           Which web pages may connect, the same rule as origin_guard.py
+
+  laptop/                    The laptop software (Python 3.11 or newer)
+    pyproject.toml           Dependencies and the list of installed modules
+    config.example.toml, calibration_points.example.json, scenario_pick_drop.json  Examples to copy
+    tests/                   Every laptop test (pytest)
+    web/                     The pages: HTML, CSS, TypeScript, and the JavaScript built from it
+      *.ts                   Edit these, then run node build.mjs (in this folder)
+      build.mjs, tsconfig.json, package.json, ui_logic.test.ts  Build, type-check and test setup
+    Perception
+      vision.py              Finds blocks, fire and the survivor's pulsing light, feeds the planner
+      aruco.py               Block markers: id, layer, weight; reads config.toml
+      scale.py, calibrate.py, scene.py  Pixels to millimetres, calibration, the scene in millimetres
+      scene_watch.py, grip_watch.py     Notice a block that moved, vanished or was not really lifted
+      stream.py, serial_camera.py       Camera sources that reconnect: network stream, USB cable
+      person_detector.py     Pretrained YOLOX-S person finder (model file not in git)
+      marker_sheet.py        Makes a printable sheet of block markers
+    Planning
+      models.py              Frozen data types: Block, HeatZone, PlanStep, Plan
+      planner.py, route.py   Top-first pick order; the cheapest safe route to the survivor
+      experience.py          Learns extra corridor clearance from past runs
+    Operator and server
+      server.py              Operator server: camera with the plan drawn on it, approve, stop, report
+      operator_core.py       What the operator sees and may approve; sends the plan to the rover
+      autopilot.py           Autonomous mode for the Blender demo (approves its own plans, learns)
+      manual_core.py         Manual drive and arm commands, with a stop if the page goes quiet
+      plan_message.py        Builds and checks the messages sent to the rover
+      rover_link.py          WebSocket link to the rover: pings, reconnects by itself
+      origin_guard.py        Only local pages and local host names may reach the server
+      report.py              Fact-first run report with a fixed set of allowed summaries
+      trial_log.py, scenario_runner.py  The 8 of 10 gate log; replay a scenario on a software or real rover
+    Simulation
+      sim_rover.py, sim_server.py       The software rover, and the same as a WebSocket server
+      demo_world.py          The demo scene shared by Blender and the tests
+      blender_link.py, blender_camera.py, snapshot_client.py, snapshot_protocol.py  Talking to the Blender twin
+      gyro_map.py            Phone tilt to drive and arm messages
+
+  firmware/                  The rover's code (ESP32); flat layout, PlatformIO builds it
+    main.cpp                 Joins Wi-Fi, starts the camera, the video server and the control task
+    pins.h, secrets.example.h  Pin map; Wi-Fi template (copy to secrets.h)
     rover_core.h             All rover behaviour: plans, link loss, safe stop, ramps, battery guard
-    hardware.cpp, hardware.h Real wheels, servos, sensors and battery reading (not bench-tested)
-    rover_link.cpp, rover_link.h  WebSocket server on port 81, origin check, mDNS (not bench-tested)
-    test_rover_*.cpp         PC tests for the four rover_*.h files
-    platformio.ini           ESP32-S3 N16R8 build settings, flat layout
-    secrets.example.h        Wi-Fi template for the 2.4 GHz phone hotspot
-    rover_sketch.txt         Earlier all-in-one rover sketch, reference only, not built
-    cam_probe.txt            Camera sensor probe for the S3 board, paste into the Arduino IDE
-    cam_scan.txt             Full camera pin scan, for when the probe finds no known map
-    bringup.txt              Bench test for servos, wheels, sensors and battery, paste into the Arduino IDE
-    rover_control.py         Console for driving the rover by hand with the protocol messages, through the same link as the server
-    camera.h, camera.cpp     GC2145 camera: raw pictures turned into JPEG on the chip
-    mjpeg_server.h, .cpp     Video over Wi-Fi: /stream (MJPEG), /capture (one picture)
-    link.cpp *               WebSocket server, link-loss handling
-    arm.cpp *                PCA9685 servo driver, pick and drop, stored plan
-    drive.cpp *              L298N wheels, manual and auto modes, IR stop
-    sensors.cpp *            IR obstacle, IR flame and DHT11 readout
+    rover_arm.h, rover_json.h, rover_origin.h, rover_types.h  Arm maths, strict message reader, origin rule, types
+    hardware.cpp/.h          Real wheels, servos, sensors and battery reading (not bench-tested)
+    rover_link.cpp/.h        WebSocket server on port 81, origin check, mDNS (not bench-tested)
+    camera.cpp/.h, mjpeg_server.cpp/.h  GC2145 camera, video over Wi-Fi
+    rover_arm_ap.cpp         The Manual tab's firmware for the classic ESP32 arm board (-e rover_arm)
+    diag_main.cpp            Boot report only, to find out why the real firmware does not start (-e diag)
+    rover_control.py         Console for driving the rover by hand with the protocol messages
+    test_rover_*.cpp         PC tests for the rover_*.h files
+    platformio.ini           Build settings for the three environments
+    sketches/                Arduino IDE sketches (bring-up, camera probe and scan), not built by PlatformIO
+
+  simulation/                Blender twin, phone bridge, demo recorder
+    blender_rover.py         The Blender scene driven by the software rover
+    phone_bridge.py, phone_control.html  Phone tilt to Blender
+    record_demo.py, survivor_check.py    Record the demo video; find the survivor in a picture
+    test_*.py                Tests for those
+
+  prototype-cpp/             The first C++ camera demo and its tests (superseded by laptop/vision.py)
+  archive/                   Old files kept for reference, not part of any build
 ```
 
 `*` = planned, not written yet. Each file has one owner (see `tasks.md`), so two people rarely edit the same file.

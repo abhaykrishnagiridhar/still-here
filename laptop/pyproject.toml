@@ -20,4 +20,5 @@ firmware = ["platformio", "esptool", "pyserial"]
 py-modules = ["aruco", "autopilot", "blender_camera", "blender_link", "calibrate", "demo_world", "experience", "grip_watch", "gyro_map", "manual_core", "marker_sheet", "models", "operator_core", "origin_guard", "person_detector", "plan_message", "planner", "report", "route", "rover_link", "scale", "scenario_runner", "scene", "scene_watch", "serial_camera", "server", "sim_rover", "sim_server", "snapshot_client", "snapshot_protocol", "stream", "trial_log", "vision"]
 
 [tool.pytest.ini_options]
-testpaths = ["."]
+testpaths = ["tests"]
+pythonpath = ["."]

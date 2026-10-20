@@ -57,7 +57,8 @@ from vision import MAX_FAILED_READS, MAX_RECONNECTS, Pipeline, clock_for, open_s
 log = logging.getLogger("still_here.server")
 
 LAPTOP_DIR = Path(__file__).resolve().parent
-# Only these files are ever served, so config.toml and the source code never are.
+WEB_DIR = LAPTOP_DIR / "web"  # the pages and their scripts and styles
+# Only these files in web/ are ever served, so config.toml and the source code never are.
 PAGES = {
     "index.html", "autonomous.html", "control.html", "blueprint.html", "terms.html", "privacy.html",
     "landing.css", "landing.js", "operator.css", "operator.js", "control.js", "api.js", "ui_logic.js",
@@ -430,7 +431,7 @@ def create_app(
             raise HTTPException(status_code=404)
         if request.query_params.get("token"):
             return sign_in(request, f"/{name}")  # an access link: remember the token, show the clean address
-        return FileResponse(LAPTOP_DIR / name)
+        return FileResponse(WEB_DIR / name)
 
     return app
 

@@ -23,7 +23,7 @@ The twin hides one fact from the planner: the buggy is really a little wider tha
 | 2 | The course is reset. The planner now counts the fifth block as in the way and removes it too: five blocks moved, nothing touched, camera confirms the way is clear. |
 | 3 and later | The same, with the same corridor. It has stopped needing to learn. |
 
-Nothing in this is scripted. The first run goes wrong because the physics says it should, and the second goes right because of what the laptop stored. `laptop/test_learning_loop.py` proves it with no Blender at all.
+Nothing in this is scripted. The first run goes wrong because the physics says it should, and the second goes right because of what the laptop stored. `laptop/tests/test_learning_loop.py` proves it with no Blender at all.
 
 What you see in Blender: green rails mark the corridor the planner keeps clear (they move apart when it widens), a board in front of the rover shows the run number and what was learned, and a pink pad marks the block that was brushed. The top-down camera never sees any of these, so the vision code is not disturbed.
 
@@ -73,7 +73,7 @@ It plays the human: it waits for the plan, shows it for 6 seconds, then approves
 
 ## The demo world
 
-`laptop/demo_world.py` holds it: four blocks across the path, one block off to the side, a fire pad, the survivor 300 mm ahead. Blender and the tests both read it. The route and plan on this world are checked in `laptop/test_demo_world.py`.
+`laptop/demo_world.py` holds it: four blocks across the path, one block off to the side, a fire pad, the survivor 300 mm ahead. Blender and the tests both read it. The route and plan on this world are checked in `laptop/tests/test_demo_world.py`.
 
 Blocks are put down in four slots outside the corridor (`DROP_SLOTS_MM` in `laptop/operator_core.py`), so the camera never sees a dropped block in the way.
 

@@ -15,7 +15,7 @@ from person_detector import (
 
 SIZE = 640
 STRIDES = (8, 16, 32)
-MODEL = Path(__file__).resolve().parent / "models" / "object_detection_yolox_2022nov_int8.onnx"
+MODEL = Path(__file__).resolve().parents[1] / "models" / "object_detection_yolox_2022nov_int8.onnx"
 
 
 def blank_output():

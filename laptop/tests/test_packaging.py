@@ -7,7 +7,7 @@ from this folder, but is absent after a normal `pip install .`, so the server fa
 import tomllib
 from pathlib import Path
 
-LAPTOP = Path(__file__).resolve().parent
+LAPTOP = Path(__file__).resolve().parents[1]
 
 
 def listed_modules() -> set[str]:

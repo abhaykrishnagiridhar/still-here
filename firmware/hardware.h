@@ -7,7 +7,7 @@
 // The real rover's parts, behind the RoverHardware interface: L298N wheels (PWM on the EN pins),
 // the PCA9685 servo driver on I2C port 1, the IR sensors, the DHT11 and the pack-voltage divider.
 // All pins come from pins.h. NOT TESTED ON THE BOARD YET: every number marked ASSUMED in
-// hardware.cpp has to be checked at the bench (see firmware/bringup.txt).
+// hardware.cpp has to be checked at the bench (see firmware/sketches/bringup.txt).
 
 // Call as the very FIRST thing in setup(), before Wi-Fi and the camera: every motor pin goes low so
 // the wheels cannot move while the rest of the system starts.

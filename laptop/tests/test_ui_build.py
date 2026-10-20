@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 import server
 
-LAPTOP = Path(__file__).resolve().parent
+LAPTOP = Path(__file__).resolve().parents[1] / "web"  # the pages, scripts and styles
 NODE = shutil.which("node")
 needs_node = pytest.mark.skipif(NODE is None, reason="Node is not installed")
 PAGES_WITH_SCRIPTS = ["autonomous.html", "control.html"]

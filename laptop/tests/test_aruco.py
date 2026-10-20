@@ -237,7 +237,7 @@ def test_the_declared_python_version_is_one_that_has_the_toml_reader():
     import tomllib
     from pathlib import Path
 
-    declared = tomllib.loads((Path(__file__).parent / "pyproject.toml").read_text(encoding="utf-8"))["project"]["requires-python"]
+    declared = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(encoding="utf-8"))["project"]["requires-python"]
 
     # aruco.py reads config.toml with tomllib, which only exists from Python 3.11
     assert int(re.search(r"(\d+)\.(\d+)", declared).group(2)) >= 11

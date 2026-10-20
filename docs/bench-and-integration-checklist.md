@@ -14,7 +14,7 @@ This is the execution order for the real rover. It does not replace
 
 ## 1. Bench test
 
-`firmware/bringup.txt` is an Arduino IDE diagnostic sketch, not a PowerShell
+`firmware/sketches/bringup.txt` is an Arduino IDE diagnostic sketch, not a PowerShell
 command and not a PlatformIO source file. Paste it into an Arduino sketch named
 `bringup`, upload it, then open Serial Monitor at 115200 baud with `Newline`.
 
@@ -50,7 +50,7 @@ motor R f
 ```
 
 If a side is physically backward, swap only that side's `IN1` and `IN2` values
-in both `firmware/pins.h` and `firmware/bringup.txt`, then repeat the test.
+in both `firmware/pins.h` and `firmware/sketches/bringup.txt`, then repeat the test.
 
 Run `sensors` and `batt` last. The left/right obstacle sensors are currently
 unwired (`-1`), so the sketch reports `-1` for them. Do not turn on

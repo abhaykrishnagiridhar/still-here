@@ -15,13 +15,13 @@ endif()
 # Finds OpenCV through the OpenCV_DIR setting that the global install created.
 find_package(OpenCV REQUIRED)
 
-add_executable(vision vision.cpp)
+add_executable(vision prototype-cpp/vision.cpp)
 target_link_libraries(vision PRIVATE ${OpenCV_LIBS})
 
 # Plain tests, no OpenCV needed:  ctest  (after building)
 enable_testing()
 foreach(t test_planner test_perception)
-  add_executable(${t} ${t}.cpp)
+  add_executable(${t} prototype-cpp/${t}.cpp)
   add_test(NAME ${t} COMMAND ${t})
 endforeach()
 

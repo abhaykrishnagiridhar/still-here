@@ -40,7 +40,7 @@ The link is one-way. Nothing goes back to the phone except the WebSocket staying
 | `laptop/sim_rover.py` | 418 | The software rover: protocol handler, wheel and arm motion, plan runner, sensors. Pure logic with an explicit clock. |
 | `laptop/origin_guard.py` | 25 | `origin_allowed(origin)`: which web pages may use the WebSocket. |
 | `laptop/models.py` | 48 | Frozen dataclasses `Block`, `HeatZone`, `PlanStep`, `Plan`. |
-| `laptop/test_gyro_map.py`, `laptop/test_sim_rover.py` | | 33 and 42 tests for the two logic modules. |
+| `laptop/tests/test_gyro_map.py`, `laptop/tests/test_sim_rover.py` | | 33 and 42 tests for the two logic modules. |
 
 `phone_bridge.py` and `blender_rover.py` add the `laptop/` folder to `sys.path` themselves, so they can import `gyro_map`, `sim_rover`, `models` and `origin_guard` without installing the project. `simulation/` has no `__init__.py`; it works as a namespace package (`simulation.phone_bridge:app`).
 

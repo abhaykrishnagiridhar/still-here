@@ -2,7 +2,7 @@
 
 // Pin plan for the ESP32-S3-WROOM-1 N16R8 board with the built-in camera socket.
 //
-// The camera wiring below is CONFIRMED on this board: firmware/cam_probe.txt found a sensor on
+// The camera wiring below is CONFIRMED on this board: firmware/sketches/cam_probe.txt found a sensor on
 // clock 15, bus 4 and 5 (the same map as Espressif's ESP32-S3-EYE), and the board's own pin legend
 // marks the same 14 pins as camera. Everything else is still untested on the bench.
 //

@@ -9,7 +9,7 @@
 // 1. How each joint's angle turns into a servo pulse (SERVOS below). The numbers assume ordinary
 //    servos on 600 to 2400 microseconds, the elbow on a 270 degree servo on 500 to 2500, and every
 //    joint turning the same way as the angle. Wrong direction or range: change `direction` and
-//    `centreAngle`. Do this with the arm held clear, one joint at a time (firmware/bringup.txt).
+//    `centreAngle`. Do this with the arm held clear, one joint at a time (firmware/sketches/bringup.txt).
 // 2. The wheel PWM frequency (1 kHz) suits the L298N. The motor direction wires may need swapping.
 // 3. IR sensor modules read LOW when triggered (most do). Check with `sensors` in bringup.txt.
 // 4. The servo power is NOT switched on at boot. It comes on the first time the arm is asked to

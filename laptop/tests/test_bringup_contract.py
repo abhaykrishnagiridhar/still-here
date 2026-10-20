@@ -3,8 +3,8 @@
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
-BRINGUP = (ROOT / "firmware" / "bringup.txt").read_text(encoding="utf-8")
+ROOT = Path(__file__).resolve().parents[2]
+BRINGUP = (ROOT / "firmware" / "sketches" / "bringup.txt").read_text(encoding="utf-8")
 PINS = (ROOT / "firmware" / "pins.h").read_text(encoding="utf-8")
 
 
